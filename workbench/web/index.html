@@ -1,0 +1,1560 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>企业级AI短视频制作工作台 (Phase 1 MVP) - 编导人工审核可视化中台</title>
+  <style>
+    :root {
+      --bg-base: #0B0F17;
+      --bg-surface-1: #111827;
+      --bg-surface-2: #1F2937;
+      --bg-surface-3: #2D3748;
+      --border-color: #273043;
+      --border-active: #38BDF8;
+      --text-main: #F8FAFC;
+      --text-muted: #94A3B8;
+      --text-dim: #64748B;
+      --accent-blue: #38BDF8;
+      --accent-blue-hover: #0EA5E9;
+      --accent-amber: #F59E0B;
+      --accent-green: #10B981;
+      --accent-red: #EF4444;
+      --accent-purple: #8B5CF6;
+      --radius-sm: 4px;
+      --radius-md: 8px;
+      --radius-lg: 12px;
+      --shadow-lg: 0 10px 25px -5px rgba(0, 0, 0, 0.6), 0 8px 10px -6px rgba(0, 0, 0, 0.4);
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+      background-color: var(--bg-base);
+      color: var(--text-main);
+      overflow: hidden;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      user-select: none;
+    }
+
+    /* Scrollbars */
+    ::-webkit-scrollbar { width: 5px; height: 5px; }
+    ::-webkit-scrollbar-track { background: var(--bg-surface-1); }
+    ::-webkit-scrollbar-thumb { background: var(--bg-surface-3); border-radius: 3px; }
+    ::-webkit-scrollbar-thumb:hover { background: var(--accent-blue); }
+
+    /* Header Bar */
+    .app-header {
+      height: 56px;
+      background: var(--bg-surface-1);
+      border-bottom: 1px solid var(--border-color);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 16px;
+      z-index: 20;
+    }
+
+    .brand-section {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .brand-logo {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-weight: 700;
+      font-size: 15px;
+      letter-spacing: 0.5px;
+      color: var(--text-main);
+    }
+
+    .brand-logo svg {
+      color: var(--accent-blue);
+    }
+
+    .project-preset-select {
+      background: var(--bg-surface-2);
+      border: 1px solid var(--border-color);
+      color: var(--text-main);
+      padding: 6px 12px;
+      border-radius: var(--radius-md);
+      font-size: 13px;
+      outline: none;
+      cursor: pointer;
+    }
+
+    .finops-badge-group {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      background: rgba(16, 185, 129, 0.1);
+      border: 1px solid rgba(16, 185, 129, 0.3);
+      padding: 4px 12px;
+      border-radius: var(--radius-md);
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      font-size: 12px;
+    }
+
+    .finops-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--accent-green);
+      box-shadow: 0 0 8px var(--accent-green);
+    }
+
+    .header-actions {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 6px 14px;
+      border-radius: var(--radius-md);
+      font-size: 12px;
+      font-weight: 600;
+      cursor: pointer;
+      border: 1px solid transparent;
+      transition: all 0.15s ease;
+      text-decoration: none;
+      white-space: nowrap;
+    }
+
+    .btn-primary {
+      background: var(--accent-blue);
+      color: #070B13;
+    }
+    .btn-primary:hover {
+      background: var(--accent-blue-hover);
+    }
+
+    .btn-secondary {
+      background: var(--bg-surface-2);
+      border-color: var(--border-color);
+      color: var(--text-main);
+    }
+    .btn-secondary:hover {
+      background: var(--bg-surface-3);
+    }
+
+    .btn-success {
+      background: var(--accent-green);
+      color: #042416;
+    }
+    .btn-success:hover {
+      opacity: 0.9;
+    }
+
+    .btn-amber {
+      background: var(--accent-amber);
+      color: #261601;
+    }
+
+    .btn-danger {
+      background: rgba(239, 68, 68, 0.15);
+      border-color: rgba(239, 68, 68, 0.4);
+      color: var(--accent-red);
+    }
+
+    /* Main Container (3-Pane Workspace) */
+    .app-main {
+      flex: 1;
+      display: flex;
+      height: calc(100vh - 56px);
+      overflow: hidden;
+    }
+
+    /* Left Pane: Storyboard Timeline (25%) */
+    .pane-left {
+      width: 25%;
+      min-width: 280px;
+      max-width: 360px;
+      background: var(--bg-surface-1);
+      border-right: 1px solid var(--border-color);
+      display: flex;
+      flex-direction: column;
+    }
+
+    .pane-header {
+      padding: 12px 14px;
+      border-bottom: 1px solid var(--border-color);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--text-muted);
+    }
+
+    .screenplay-box {
+      padding: 12px;
+      border-bottom: 1px solid var(--border-color);
+      background: rgba(0, 0, 0, 0.2);
+    }
+
+    .screenplay-textarea {
+      width: 100%;
+      height: 60px;
+      background: var(--bg-surface-2);
+      border: 1px solid var(--border-color);
+      border-radius: var(--radius-sm);
+      color: var(--text-main);
+      font-size: 12px;
+      padding: 8px;
+      resize: none;
+      outline: none;
+      font-family: inherit;
+    }
+    .screenplay-textarea:focus {
+      border-color: var(--accent-blue);
+    }
+
+    .shots-list {
+      flex: 1;
+      overflow-y: auto;
+      padding: 10px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .shot-card {
+      background: var(--bg-surface-2);
+      border: 1px solid var(--border-color);
+      border-radius: var(--radius-md);
+      padding: 10px;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .shot-card:hover {
+      border-color: var(--text-dim);
+    }
+    .shot-card.active {
+      border-color: var(--accent-blue);
+      background: rgba(56, 189, 248, 0.05);
+      box-shadow: 0 0 12px rgba(56, 189, 248, 0.15);
+    }
+
+    .shot-card-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 6px;
+    }
+
+    .shot-seq-badge {
+      font-family: monospace;
+      font-size: 11px;
+      font-weight: 700;
+      background: rgba(255, 255, 255, 0.1);
+      padding: 2px 6px;
+      border-radius: var(--radius-sm);
+    }
+
+    .shot-status-badge {
+      font-size: 10px;
+      padding: 2px 6px;
+      border-radius: var(--radius-sm);
+      font-weight: 600;
+      text-transform: uppercase;
+    }
+    .status-review { background: rgba(245, 158, 11, 0.15); color: var(--accent-amber); border: 1px solid rgba(245, 158, 11, 0.3); }
+    .status-approved { background: rgba(56, 189, 248, 0.15); color: var(--accent-blue); border: 1px solid rgba(56, 189, 248, 0.3); }
+    .status-ready { background: rgba(16, 185, 129, 0.15); color: var(--accent-green); border: 1px solid rgba(16, 185, 129, 0.3); }
+
+    .shot-summary-text {
+      font-size: 12px;
+      color: var(--text-main);
+      line-height: 1.4;
+      margin-bottom: 6px;
+    }
+
+    .shot-meta-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 11px;
+      color: var(--text-dim);
+    }
+
+    /* Middle Pane: Human Review Workshop (50%) */
+    .pane-center {
+      flex: 1;
+      background: var(--bg-base);
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      position: relative;
+    }
+
+    .tabs-header {
+      height: 48px;
+      border-bottom: 1px solid var(--border-color);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 16px;
+      background: var(--bg-surface-1);
+    }
+
+    .tabs-group {
+      display: flex;
+      gap: 6px;
+    }
+
+    .tab-btn {
+      background: transparent;
+      border: 1px solid transparent;
+      color: var(--text-muted);
+      font-size: 12px;
+      font-weight: 600;
+      padding: 6px 14px;
+      border-radius: var(--radius-md);
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      transition: all 0.15s;
+    }
+    .tab-btn:hover {
+      color: var(--text-main);
+      background: var(--bg-surface-2);
+    }
+    .tab-btn.active {
+      color: var(--accent-blue);
+      background: rgba(56, 189, 248, 0.12);
+      border-color: rgba(56, 189, 248, 0.3);
+    }
+
+    .tab-content-area {
+      flex: 1;
+      padding: 16px;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* Tab 1: 2x2 Matrix Grid */
+    .matrix-container {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+      flex: 1;
+    }
+
+    .frame-column {
+      background: var(--bg-surface-1);
+      border: 1px solid var(--border-color);
+      border-radius: var(--radius-lg);
+      padding: 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .column-title {
+      font-size: 13px;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .candidate-card {
+      background: var(--bg-surface-2);
+      border: 2px solid var(--border-color);
+      border-radius: var(--radius-md);
+      overflow: hidden;
+      cursor: pointer;
+      transition: all 0.2s;
+      position: relative;
+    }
+    .candidate-card:hover {
+      border-color: var(--text-dim);
+    }
+    .candidate-card.selected {
+      border-color: var(--accent-blue);
+      box-shadow: 0 0 16px rgba(56, 189, 248, 0.25);
+    }
+
+    .candidate-img-box {
+      width: 100%;
+      height: 180px;
+      background: #000;
+      position: relative;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      overflow: hidden;
+    }
+    .candidate-img-box img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+
+    .candidate-badge {
+      position: absolute;
+      top: 8px;
+      left: 8px;
+      background: rgba(0, 0, 0, 0.8);
+      backdrop-filter: blur(4px);
+      padding: 3px 8px;
+      border-radius: var(--radius-sm);
+      font-size: 11px;
+      font-weight: 700;
+      font-family: monospace;
+      border: 1px solid rgba(255, 255, 255, 0.15);
+    }
+
+    .selected-indicator {
+      position: absolute;
+      top: 8px;
+      right: 8px;
+      background: var(--accent-blue);
+      color: #000;
+      width: 22px;
+      height: 22px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 12px;
+      font-weight: bold;
+      box-shadow: 0 0 8px var(--accent-blue);
+    }
+
+    .candidate-footer {
+      padding: 8px 10px;
+      font-size: 11px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      color: var(--text-muted);
+      background: var(--bg-surface-2);
+    }
+
+    /* Tab 2: Onion Skinning (透光台叠影模式) */
+    .onion-stage {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      position: relative;
+    }
+
+    .onion-viewport {
+      width: 90%;
+      max-width: 680px;
+      aspect-ratio: 16 / 9;
+      background: #000;
+      border: 1px solid var(--border-color);
+      border-radius: var(--radius-lg);
+      position: relative;
+      overflow: hidden;
+      box-shadow: var(--shadow-lg);
+    }
+
+    .onion-layer {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+
+    .onion-overlay-grid {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      pointer-events: none;
+      background-image: 
+        linear-gradient(to right, rgba(255,255,255,0.06) 1px, transparent 1px),
+        linear-gradient(to bottom, rgba(255,255,255,0.06) 1px, transparent 1px);
+      background-size: 33.333% 33.333%;
+    }
+
+    .onion-controls {
+      margin-top: 16px;
+      width: 90%;
+      max-width: 680px;
+      background: var(--bg-surface-1);
+      border: 1px solid var(--border-color);
+      border-radius: var(--radius-md);
+      padding: 12px 18px;
+      display: flex;
+      align-items: center;
+      gap: 16px;
+    }
+
+    .slider-container {
+      flex: 1;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      font-size: 12px;
+      color: var(--text-muted);
+    }
+
+    .slider-range {
+      flex: 1;
+      height: 6px;
+      border-radius: 3px;
+      accent-color: var(--accent-blue);
+      cursor: pointer;
+    }
+
+    /* Tab 3: Inpainting Canvas (缺陷修复工坊) */
+    .inpaint-stage {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .inpaint-toolbar {
+      background: var(--bg-surface-1);
+      border: 1px solid var(--border-color);
+      border-radius: var(--radius-md);
+      padding: 8px 12px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+    }
+
+    .inpaint-canvas-wrapper {
+      flex: 1;
+      background: #000;
+      border: 1px solid var(--border-color);
+      border-radius: var(--radius-md);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      position: relative;
+      min-height: 380px;
+    }
+
+    #inpaintCanvas {
+      cursor: crosshair;
+      border-radius: var(--radius-sm);
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.8);
+    }
+
+    .brush-cursor-circle {
+      position: absolute;
+      border: 2px solid rgba(239, 68, 68, 0.8);
+      background: rgba(239, 68, 68, 0.2);
+      border-radius: 50%;
+      pointer-events: none;
+      transform: translate(-50%, -50%);
+      display: none;
+    }
+
+    .inpaint-prompt-box {
+      background: var(--bg-surface-1);
+      border: 1px solid var(--border-color);
+      border-radius: var(--radius-md);
+      padding: 10px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .quick-tags {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    .tag-chip {
+      background: var(--bg-surface-2);
+      border: 1px solid var(--border-color);
+      padding: 2px 8px;
+      border-radius: var(--radius-sm);
+      font-size: 11px;
+      color: var(--text-muted);
+      cursor: pointer;
+    }
+    .tag-chip:hover {
+      border-color: var(--accent-blue);
+      color: var(--text-main);
+    }
+
+    /* Bottom Action Bar */
+    .workshop-bottom-bar {
+      height: 56px;
+      background: var(--bg-surface-1);
+      border-top: 1px solid var(--border-color);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 20px;
+    }
+
+    /* Right Pane: Monitor & FinOps Ledger (25%) */
+    .pane-right {
+      width: 25%;
+      min-width: 280px;
+      max-width: 360px;
+      background: var(--bg-surface-1);
+      border-left: 1px solid var(--border-color);
+      display: flex;
+      flex-direction: column;
+    }
+
+    .video-monitor-box {
+      width: 100%;
+      aspect-ratio: 16 / 9;
+      background: #000;
+      position: relative;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border-bottom: 1px solid var(--border-color);
+    }
+
+    .monitor-player {
+      width: 100%;
+      height: 100%;
+      object-fit: contain;
+    }
+
+    .monitor-overlay-placeholder {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      color: var(--text-dim);
+      font-size: 12px;
+      text-align: center;
+      padding: 10px;
+    }
+
+    .finops-ledger-section {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    .ledger-table-wrap {
+      flex: 1;
+      overflow-y: auto;
+      padding: 8px;
+    }
+
+    .ledger-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 11px;
+      font-family: monospace;
+    }
+
+    .ledger-table th {
+      text-align: left;
+      color: var(--text-dim);
+      padding: 6px 8px;
+      border-bottom: 1px solid var(--border-color);
+    }
+
+    .ledger-table td {
+      padding: 6px 8px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+      color: var(--text-muted);
+    }
+
+    .ledger-table td.cost-num {
+      color: var(--accent-green);
+      font-weight: 600;
+      text-align: right;
+    }
+
+    /* Modal / Drawer */
+    .modal-backdrop {
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.7);
+      backdrop-filter: blur(4px);
+      z-index: 100;
+      display: none;
+      align-items: center;
+      justify-content: center;
+    }
+    .modal-backdrop.open {
+      display: flex;
+    }
+
+    .modal-dialog {
+      background: var(--bg-surface-1);
+      border: 1px solid var(--border-color);
+      border-radius: var(--radius-lg);
+      width: 90%;
+      max-width: 600px;
+      max-height: 80vh;
+      display: flex;
+      flex-direction: column;
+      box-shadow: var(--shadow-lg);
+      overflow: hidden;
+    }
+
+    .modal-header {
+      padding: 14px 18px;
+      border-bottom: 1px solid var(--border-color);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      font-size: 14px;
+      font-weight: 700;
+    }
+
+    .modal-body {
+      padding: 16px;
+      overflow-y: auto;
+      font-size: 13px;
+      line-height: 1.6;
+    }
+
+    .pipeline-item-card {
+      background: var(--bg-surface-2);
+      border: 1px solid var(--border-color);
+      border-radius: var(--radius-md);
+      padding: 10px;
+      margin-bottom: 8px;
+    }
+
+    .pipeline-item-card h4 {
+      font-size: 13px;
+      color: var(--accent-blue);
+      margin-bottom: 4px;
+      font-family: monospace;
+    }
+
+    .pipeline-item-card p {
+      font-size: 12px;
+      color: var(--text-muted);
+    }
+
+    /* Loading Pulse */
+    @keyframes pulse-ring {
+      0% { transform: scale(0.95); opacity: 0.8; }
+      50% { transform: scale(1.05); opacity: 0.4; }
+      100% { transform: scale(0.95); opacity: 0.8; }
+    }
+    .pulsing-dot {
+      animation: pulse-ring 2s infinite ease-in-out;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Top App Header -->
+  <header class="app-header">
+    <div class="brand-section">
+      <div class="brand-logo">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+          <rect width="18" height="18" x="3" y="3" rx="2"/><path d="m9 8 6 4-6 4Z"/>
+        </svg>
+        <span>AI 短视频工业化工作台</span>
+        <span style="font-size: 11px; padding: 2px 6px; background: rgba(56,189,248,0.15); color: var(--accent-blue); border-radius: 4px; font-weight: 600;">Phase 1 编导人工审核中台</span>
+      </div>
+
+      <select id="presetSelect" class="project-preset-select" onchange="switchPreset(this.value)">
+        <option value="taotie">饕餮神话·破晓篇 (默认)</option>
+        <option value="libai">李白·诗剑行 (国风动漫篇)</option>
+        <option value="four_beasts">山海经·四凶兽启示录</option>
+      </select>
+    </div>
+
+    <!-- FinOps Balance & Pre-flight Breaker Status -->
+    <div class="finops-badge-group">
+      <div class="finops-dot pulsing-dot" id="finopsDot"></div>
+      <span>302.AI 账户余额: <strong id="balanceDisplay" style="color: #fff;">$4.8213</strong></span>
+      <span style="color: var(--text-dim);">|</span>
+      <span style="color: var(--accent-green);" id="breakerStatus">🛡️ 事前 120% 算力熔断放行</span>
+    </div>
+
+    <!-- Header Actions -->
+    <div class="header-actions">
+      <button class="btn btn-secondary" onclick="openPipelinesModal()">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
+        批量管线库 (13)
+      </button>
+      <button class="btn btn-secondary" onclick="refreshProjectData()">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/><path d="M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16"/><path d="M16 21h5v-5"/></svg>
+        刷新数据
+      </button>
+    </div>
+  </header>
+
+  <!-- 3-Pane Main Application Layout -->
+  <main class="app-main">
+
+    <!-- Left Pane: Storyboard Timeline (25%) -->
+    <section class="pane-left">
+      <div class="pane-header">
+        <span>分镜时序编排 (STORYBOARD)</span>
+        <span id="shotCountBadge" style="font-family: monospace;">2 镜头</span>
+      </div>
+
+      <div class="screenplay-box">
+        <label style="font-size: 11px; color: var(--text-dim); display: block; margin-bottom: 4px;">剧本台本输入:</label>
+        <textarea id="screenplayInput" class="screenplay-textarea" placeholder="输入一句话创意或分镜剧情..."></textarea>
+        <div style="margin-top: 6px; display: flex; justify-content: flex-end;">
+          <button class="btn btn-primary" style="padding: 4px 10px; font-size: 11px;" onclick="handleDecompose()">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z"/></svg>
+            智能重拆分镜
+          </button>
+        </div>
+      </div>
+
+      <div class="shots-list" id="shotsList">
+        <!-- Rendered dynamically -->
+      </div>
+    </section>
+
+    <!-- Center Pane: Visual Human Review Workshop (50%) -->
+    <section class="pane-center">
+      
+      <!-- Workshop Tabs Header -->
+      <div class="tabs-header">
+        <div class="tabs-group">
+          <button class="tab-btn active" id="tabBtnMatrix" onclick="switchTab('matrix')">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect width="7" height="7" x="3" y="3" rx="1"/><rect width="7" height="7" x="14" y="3" rx="1"/><rect width="7" height="7" x="14" y="14" rx="1"/><rect width="7" height="7" x="3" y="14" rx="1"/></svg>
+            2x2 候选对比评审
+          </button>
+          <button class="tab-btn" id="tabBtnOnion" onclick="switchTab('onion')">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20"/></svg>
+            透光台叠影对齐 (Onion)
+          </button>
+          <button class="tab-btn" id="tabBtnInpaint" onclick="switchTab('inpaint')">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m18 11 2-2a2.828 2.828 0 0 0-4-4l-2 2"/><path d="M14 7l4 4"/><path d="M14 7l-9.5 9.5a1.5 1.5 0 0 0 0 2.122l.878.878a1.5 1.5 0 0 0 2.122 0L17 10"/></svg>
+            Canvas 瑕疵涂抹工坊 (Inpaint)
+          </button>
+        </div>
+
+        <div style="font-size: 12px; color: var(--text-dim);" id="activeShotIndicator">
+          当前选中: 镜号 #01
+        </div>
+      </div>
+
+      <!-- Workshop Tab Content Areas -->
+      <div class="tab-content-area" id="tabContentArea">
+
+        <!-- Tab 1: 2x2 Matrix Review (Default) -->
+        <div id="viewMatrix" class="matrix-container">
+          <!-- Start Frame Column -->
+          <div class="frame-column">
+            <div class="column-title">
+              <span style="color: var(--accent-blue);">起幅 · START KEYFRAME (机位起态)</span>
+              <span style="font-size: 11px; color: var(--text-dim);">二选一选用</span>
+            </div>
+            <div id="startCandidatesBox" style="display: flex; flex-direction: column; gap: 10px;">
+              <!-- Dynamic Candidate A and B -->
+            </div>
+          </div>
+
+          <!-- End Frame Column -->
+          <div class="frame-column">
+            <div class="column-title">
+              <span style="color: var(--accent-amber);">落幅 · END KEYFRAME (运镜终态)</span>
+              <span style="font-size: 11px; color: var(--text-dim);">二选一选用</span>
+            </div>
+            <div id="endCandidatesBox" style="display: flex; flex-direction: column; gap: 10px;">
+              <!-- Dynamic Candidate A and B -->
+            </div>
+          </div>
+        </div>
+
+        <!-- Tab 2: Onion Skinning (透光台叠影) -->
+        <div id="viewOnion" class="onion-stage" style="display: none;">
+          <div class="onion-viewport">
+            <img id="onionLayerStart" class="onion-layer" src="" alt="Start Keyframe" />
+            <img id="onionLayerEnd" class="onion-layer" src="" alt="End Keyframe" style="opacity: 0.5;" />
+            <div class="onion-overlay-grid" id="onionGrid"></div>
+          </div>
+
+          <div class="onion-controls">
+            <div class="slider-container">
+              <span>起幅 (Start)</span>
+              <input type="range" min="0" max="100" value="50" class="slider-range" id="onionSlider" oninput="updateOnionOpacity(this.value)">
+              <span>落幅 (End)</span>
+              <span id="onionAlphaLabel" style="font-family: monospace; color: var(--accent-blue);">50%</span>
+            </div>
+            <button class="btn btn-secondary" style="font-size: 11px;" onclick="toggleAutoBlink()" id="btnAutoBlink">
+              🌬️ 自动呼吸闪烁对比
+            </button>
+            <button class="btn btn-secondary" style="font-size: 11px;" onclick="toggleOnionGrid()" id="btnGridToggle">
+              📐 九宫格参考线
+            </button>
+          </div>
+        </div>
+
+        <!-- Tab 3: HTML5 Canvas Inpainting (缺陷打回修复工坊) -->
+        <div id="viewInpaint" class="inpaint-stage" style="display: none;">
+          <div class="inpaint-toolbar">
+            <div style="display: flex; align-items: center; gap: 8px;">
+              <span style="font-size: 12px; font-weight: 600;">画笔工具:</span>
+              <button class="btn btn-primary" id="toolBrush" onclick="setInpaintTool('brush')">🖌️ 涂抹画笔</button>
+              <button class="btn btn-secondary" id="toolEraser" onclick="setInpaintTool('eraser')">🧽 橡皮擦</button>
+              <button class="btn btn-secondary" onclick="clearInpaintMask()">🗑️ 清空掩码</button>
+            </div>
+
+            <div style="display: flex; align-items: center; gap: 10px; font-size: 12px;">
+              <span>笔刷粗细:</span>
+              <input type="range" min="10" max="80" value="30" class="slider-range" id="brushSizeSlider" style="width: 100px;" oninput="updateBrushSize(this.value)">
+              <span id="brushSizeDisplay" style="font-family: monospace;">30px</span>
+            </div>
+          </div>
+
+          <div class="inpaint-canvas-wrapper" id="canvasWrapper">
+            <canvas id="inpaintCanvas" width="640" height="360"></canvas>
+            <div class="brush-cursor-circle" id="brushCursor"></div>
+          </div>
+
+          <div class="inpaint-prompt-box">
+            <div style="display: flex; align-items: center; justify-content: space-between;">
+              <label style="font-size: 12px; font-weight: 600;">打回重绘修改指示 (Prompt Feedback):</label>
+              <span style="font-size: 11px; color: var(--accent-amber);" id="inpaintLimitBadge">重绘计数: 0/3</span>
+            </div>
+            <input type="text" id="inpaintPromptInput" class="screenplay-textarea" style="height: 38px; line-height: 20px;" placeholder="例如: 修复面部右侧骨角断裂，保持神兽威严质感..." value="修复面部右侧骨角断裂，补齐金色微光脉络" />
+            
+            <div class="quick-tags">
+              <span class="tag-chip" onclick="applyInpaintTag('修复面部骨角断裂缺陷，补齐金色威严质感')">✨ 修复面部骨角</span>
+              <span class="tag-chip" onclick="applyInpaintTag('抹除右下角多余穿模杂质，保持纯净黑金背景')">🌿 抹除穿模杂质</span>
+              <span class="tag-chip" onclick="applyInpaintTag('修正强光过曝反光，平衡整体冷暖色调')">💡 平衡高光反光</span>
+              <span class="tag-chip" onclick="applyInpaintTag('强化眼眸微光粒子，增加神话生物压迫感')">👁️ 强化神兽眼眸</span>
+            </div>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- Workshop Bottom Control Console -->
+      <footer class="workshop-bottom-bar">
+        <div style="display: flex; align-items: center; gap: 10px;">
+          <button class="btn btn-danger" onclick="handleRejectFullShot()">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="m15 9-6 6"/><path d="m9 9 6 6"/></svg>
+            驳回整镜重抽
+          </button>
+          <span style="font-size: 11px; color: var(--text-dim);" id="bottomTipText">已选择起幅 A + 落幅 A</span>
+        </div>
+
+        <div style="display: flex; align-items: center; gap: 10px;">
+          <button class="btn btn-secondary" id="btnSubmitInpaint" style="display: none;" onclick="handleSubmitInpaint()">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/><path d="m21 3-9 9"/><path d="M15 3h6v6"/></svg>
+            提交局部打回重绘 (Inpaint)
+          </button>
+          <button class="btn btn-success" id="btnApprove" onclick="handleApproveShot()">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6 9 17l-5-5"/></svg>
+            核准通过起止帧 (Approve)
+          </button>
+          <button class="btn btn-primary" id="btnSynthesize" onclick="handleSynthesizeVideo()">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="6 3 20 12 6 21 6 3"/></svg>
+            触发首尾帧插值视频渲染 (Kling I2V)
+          </button>
+        </div>
+      </footer>
+    </section>
+
+    <!-- Right Pane: Video Monitor & FinOps Ledger (25%) -->
+    <section class="pane-right">
+      <div class="pane-header">
+        <span>监视器与参数 (INSPECTOR)</span>
+        <span style="color: var(--accent-blue);">720P 在轨</span>
+      </div>
+
+      <!-- Realtime Video Player -->
+      <div class="video-monitor-box">
+        <video id="monitorVideo" class="monitor-player" controls autoplay loop playsinline style="display: none;"></video>
+        <div id="monitorPlaceholder" class="monitor-overlay-placeholder">
+          <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect width="18" height="18" x="3" y="3" rx="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"/></svg>
+          <span id="monitorStatusText">当前镜头尚未渲染视频</span>
+          <span style="font-size: 11px; color: var(--text-dim);">核准起止关键帧后触发插值合成</span>
+        </div>
+      </div>
+
+      <!-- Camera Motion & Prompt Inspector -->
+      <div style="padding: 10px 14px; border-bottom: 1px solid var(--border-color); background: rgba(0,0,0,0.15);">
+        <div style="font-size: 11px; color: var(--accent-amber); font-weight: 700; margin-bottom: 4px;">运镜机位 (CAMERA MOTION):</div>
+        <div id="inspectorCameraMotion" style="font-size: 12px; color: var(--text-main); margin-bottom: 8px;">缓缓推近并伴随低仰拍</div>
+
+        <div style="font-size: 11px; color: var(--accent-blue); font-weight: 700; margin-bottom: 4px;">时序引导词 (GUIDANCE):</div>
+        <div id="inspectorGuidance" style="font-size: 11px; color: var(--text-muted); line-height: 1.4;">平滑推进到特写，浓雾流向两侧散开</div>
+      </div>
+
+      <!-- FinOps Ledger Section -->
+      <div class="finops-ledger-section">
+        <div class="pane-header" style="border-top: none;">
+          <span>算力账本流水 (COST LEDGER)</span>
+          <span id="ledgerTotalCost" style="color: var(--accent-green); font-family: monospace;">$0.0000</span>
+        </div>
+
+        <div class="ledger-table-wrap">
+          <table class="ledger-table">
+            <thead>
+              <tr>
+                <th>任务阶段</th>
+                <th>模型</th>
+                <th style="text-align: right;">花费</th>
+              </tr>
+            </thead>
+            <tbody id="ledgerTableBody">
+              <!-- Dynamically rendered -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+    </section>
+  </main>
+
+  <!-- Pipelines Hub Modal Dialog -->
+  <div class="modal-backdrop" id="pipelinesModal">
+    <div class="modal-dialog">
+      <div class="modal-header">
+        <span>🎬 工程内置视频生成管线库 (Pipelines Hub)</span>
+        <button class="btn btn-secondary" style="padding: 2px 8px;" onclick="closePipelinesModal()">✕</button>
+      </div>
+      <div class="modal-body" id="pipelinesListBody">
+        <!-- Rendered dynamically -->
+      </div>
+    </div>
+  </div>
+
+  <!-- Application Logic (Self-contained, Pure Modern Vanilla JS) -->
+  <script>
+    // --- Application State ---
+    let project = null;
+    let activeShotId = null;
+    let currentTab = 'matrix'; // 'matrix' | 'onion' | 'inpaint'
+    let currentTool = 'brush'; // 'brush' | 'eraser'
+    let brushSize = 30;
+    let isDrawing = false;
+    let autoBlinkTimer = null;
+    let onionShowingStart = true;
+    let showGrid = false;
+
+    // Canvas State
+    const canvas = document.getElementById('inpaintCanvas');
+    const ctx = canvas.getContext('2d');
+    const brushCursor = document.getElementById('brushCursor');
+    const canvasWrapper = document.getElementById('canvasWrapper');
+
+    // --- API Service Layer ---
+    async function apiFetch(endpoint, options = {}) {
+      try {
+        const res = await fetch(endpoint, {
+          headers: { 'Content-Type': 'application/json' },
+          ...options
+        });
+        if (!res.ok) {
+          const errData = await res.json().catch(() => ({ detail: res.statusText }));
+          throw new Error(errData.detail || 'API Request Failed');
+        }
+        return await res.json();
+      } catch (err) {
+        console.error(`[API Error] ${endpoint}:`, err);
+        alert(`操作失败: ${err.message}`);
+        throw err;
+      }
+    }
+
+    // --- Init & Data Loading ---
+    async function initApp() {
+      await refreshProjectData();
+      await refreshBalanceAndLedger();
+      initCanvasEvents();
+    }
+
+    async function refreshProjectData() {
+      project = await apiFetch('/api/project');
+      renderProjectInfo();
+      renderShotsList();
+      if (!activeShotId && project.shots.length > 0) {
+        selectShot(project.shots[0].id);
+      } else if (activeShotId) {
+        selectShot(activeShotId);
+      }
+    }
+
+    async function refreshBalanceAndLedger() {
+      const balanceData = await apiFetch('/api/finops/balance');
+      document.getElementById('balanceDisplay').innerText = `$${balanceData.current_balance.toFixed(4)}`;
+      const dot = document.getElementById('finopsDot');
+      const status = document.getElementById('breakerStatus');
+      if (balanceData.is_safe) {
+        dot.style.background = 'var(--accent-green)';
+        status.innerText = '🛡️ 事前 120% 算力熔断放行';
+        status.style.color = 'var(--accent-green)';
+      } else {
+        dot.style.background = 'var(--accent-red)';
+        status.innerText = '⚠️ 余额不足以支持渲染 (已熔断拦截)';
+        status.style.color = 'var(--accent-red)';
+      }
+
+      const ledgerData = await apiFetch('/api/finops/ledger');
+      document.getElementById('ledgerTotalCost').innerText = `$${ledgerData.total_cost.toFixed(4)}`;
+      const tbody = document.getElementById('ledgerTableBody');
+      tbody.innerHTML = '';
+      ledgerData.ledger.slice().reverse().forEach(entry => {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+          <td>${entry.task_type}</td>
+          <td>${entry.model_name.replace('gpt-image-2.6-sunburst', 'GPT-IMG').replace('kling-v1-6', 'Kling')}</td>
+          <td class="cost-num">$${entry.cost_usd.toFixed(4)}</td>
+        `;
+        tbody.appendChild(tr);
+      });
+    }
+
+    function renderProjectInfo() {
+      document.getElementById('screenplayInput').value = project.screenplay_raw;
+      document.getElementById('shotCountBadge').innerText = `${project.shots.length} 镜头`;
+    }
+
+    // --- Storyboard Pane Rendering ---
+    function renderShotsList() {
+      const list = document.getElementById('shotsList');
+      list.innerHTML = '';
+      project.shots.forEach((shot, index) => {
+        const card = document.createElement('div');
+        card.className = `shot-card ${shot.id === activeShotId ? 'active' : ''}`;
+        card.onclick = () => selectShot(shot.id);
+
+        let statusClass = 'status-review';
+        let statusLabel = '待人工审核';
+        if (shot.status === 'READY') {
+          statusClass = 'status-ready';
+          statusLabel = '成片就绪';
+        } else if (shot.status === 'KEYFRAMES_APPROVED') {
+          statusClass = 'status-approved';
+          statusLabel = '已核准';
+        } else if (shot.status === 'INPAINTING_RUNNING') {
+          statusClass = 'status-review';
+          statusLabel = '局部重绘中';
+        }
+
+        card.innerHTML = `
+          <div class="shot-card-header">
+            <span class="shot-seq-badge">SHOT #${String(shot.sequence_index).padStart(2, '0')}</span>
+            <span class="shot-status-badge ${statusClass}">${statusLabel}</span>
+          </div>
+          <div class="shot-summary-text">${shot.scene_summary}</div>
+          <div class="shot-meta-row">
+            <span>⏱️ ${shot.duration_seconds}s</span>
+            <span>🎥 ${shot.camera_motion.split('(')[0]}</span>
+            <span>💰 ~$0.30</span>
+          </div>
+        `;
+        list.appendChild(card);
+      });
+    }
+
+    function selectShot(shotId) {
+      activeShotId = shotId;
+      renderShotsList();
+      const shot = project.shots.find(s => s.id === shotId);
+      if (!shot) return;
+
+      document.getElementById('activeShotIndicator').innerText = `当前选中: 镜号 #${String(shot.sequence_index).padStart(2, '0')}`;
+      document.getElementById('inspectorCameraMotion').innerText = shot.camera_motion;
+      document.getElementById('inspectorGuidance').innerText = shot.dynamic_guidance || '保持空间透视稳定推移';
+
+      renderMatrixView(shot);
+      renderOnionView(shot);
+      setupInpaintCanvas(shot);
+      renderVideoMonitor(shot);
+      updateBottomBarState(shot);
+    }
+
+    // --- Tab 1: 2x2 Matrix Review ---
+    function renderMatrixView(shot) {
+      const startBox = document.getElementById('startCandidatesBox');
+      const endBox = document.getElementById('endCandidatesBox');
+      startBox.innerHTML = '';
+      endBox.innerHTML = '';
+
+      shot.start_candidates.forEach(cand => {
+        const isSelected = (shot.selected_start_frame_id === cand.id);
+        const card = document.createElement('div');
+        card.className = `candidate-card ${isSelected ? 'selected' : ''}`;
+        card.onclick = () => selectCandidate(shot.id, cand.id, 'START');
+        card.innerHTML = `
+          <div class="candidate-img-box">
+            <img src="${cand.image_url}" alt="Start ${cand.candidate_slot}" />
+            <div class="candidate-badge">START SLOT ${cand.candidate_slot} (v${cand.revision_version})</div>
+            ${isSelected ? '<div class="selected-indicator">✓</div>' : ''}
+          </div>
+          <div class="candidate-footer">
+            <span>模型: GPT-IMG-2.6</span>
+            <span style="color: var(--accent-green);">$${cand.cost_usd.toFixed(4)}</span>
+          </div>
+        `;
+        startBox.appendChild(card);
+      });
+
+      shot.end_candidates.forEach(cand => {
+        const isSelected = (shot.selected_end_frame_id === cand.id);
+        const card = document.createElement('div');
+        card.className = `candidate-card ${isSelected ? 'selected' : ''}`;
+        card.onclick = () => selectCandidate(shot.id, cand.id, 'END');
+        card.innerHTML = `
+          <div class="candidate-img-box">
+            <img src="${cand.image_url}" alt="End ${cand.candidate_slot}" />
+            <div class="candidate-badge">END SLOT ${cand.candidate_slot} (v${cand.revision_version})</div>
+            ${isSelected ? '<div class="selected-indicator">✓</div>' : ''}
+          </div>
+          <div class="candidate-footer">
+            <span>模型: GPT-IMG-2.6</span>
+            <span style="color: var(--accent-green);">$${cand.cost_usd.toFixed(4)}</span>
+          </div>
+        `;
+        endBox.appendChild(card);
+      });
+    }
+
+    async function selectCandidate(shotId, candidateId, frameType) {
+      const updatedShot = await apiFetch(`/api/shots/${shotId}/select_candidate`, {
+        method: 'POST',
+        body: JSON.stringify({ candidate_id: candidateId, frame_type: frameType })
+      });
+      // Update local shot
+      const idx = project.shots.findIndex(s => s.id === shotId);
+      if (idx !== -1) project.shots[idx] = updatedShot;
+      selectShot(shotId);
+    }
+
+    // --- Tab 2: Onion Skinning ---
+    function renderOnionView(shot) {
+      const startCand = shot.start_candidates.find(c => c.id === shot.selected_start_frame_id) || shot.start_candidates[0];
+      const endCand = shot.end_candidates.find(c => c.id === shot.selected_end_frame_id) || shot.end_candidates[0];
+
+      if (startCand) document.getElementById('onionLayerStart').src = startCand.image_url;
+      if (endCand) document.getElementById('onionLayerEnd').src = endCand.image_url;
+    }
+
+    function updateOnionOpacity(val) {
+      const alpha = val / 100;
+      document.getElementById('onionLayerEnd').style.opacity = alpha;
+      document.getElementById('onionAlphaLabel').innerText = `${val}%`;
+    }
+
+    function toggleAutoBlink() {
+      const btn = document.getElementById('btnAutoBlink');
+      if (autoBlinkTimer) {
+        clearInterval(autoBlinkTimer);
+        autoBlinkTimer = null;
+        btn.innerText = '🌬️ 自动呼吸闪烁对比';
+        document.getElementById('onionLayerEnd').style.opacity = 0.5;
+        document.getElementById('onionSlider').value = 50;
+      } else {
+        btn.innerText = '⏹️ 停止闪烁';
+        autoBlinkTimer = setInterval(() => {
+          onionShowingStart = !onionShowingStart;
+          const targetAlpha = onionShowingStart ? 0 : 1;
+          document.getElementById('onionLayerEnd').style.opacity = targetAlpha;
+          document.getElementById('onionSlider').value = targetAlpha * 100;
+          document.getElementById('onionAlphaLabel').innerText = `${targetAlpha * 100}%`;
+        }, 600);
+      }
+    }
+
+    function toggleOnionGrid() {
+      showGrid = !showGrid;
+      const grid = document.getElementById('onionGrid');
+      grid.style.display = showGrid ? 'block' : 'none';
+      document.getElementById('btnGridToggle').innerText = showGrid ? '📐 隐藏参考线' : '📐 九宫格参考线';
+    }
+
+    // --- Tab 3: Inpainting Canvas ---
+    let currentInpaintCandidate = null;
+    function setupInpaintCanvas(shot) {
+      const cand = shot.end_candidates.find(c => c.id === shot.selected_end_frame_id) || shot.start_candidates[0];
+      currentInpaintCandidate = cand;
+      document.getElementById('inpaintLimitBadge').innerText = `重绘次数: ${shot.inpaint_retry_count}/3`;
+
+      if (!cand) return;
+      const bgImg = new Image();
+      bgImg.crossOrigin = "anonymous";
+      bgImg.src = cand.image_url;
+      bgImg.onload = () => {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        ctx.drawImage(bgImg, 0, 0, canvas.width, canvas.height);
+      };
+    }
+
+    function initCanvasEvents() {
+      canvas.addEventListener('mousedown', (e) => {
+        isDrawing = true;
+        drawPoint(e);
+      });
+      window.addEventListener('mouseup', () => { isDrawing = false; ctx.beginPath(); });
+      canvas.addEventListener('mousemove', (e) => {
+        updateCursor(e);
+        if (isDrawing) drawPoint(e);
+      });
+      canvas.addEventListener('mouseenter', () => { brushCursor.style.display = 'block'; });
+      canvas.addEventListener('mouseleave', () => { brushCursor.style.display = 'none'; });
+    }
+
+    function updateCursor(e) {
+      const rect = canvas.getBoundingClientRect();
+      const x = e.clientX - rect.left;
+      const y = e.clientY - rect.top;
+      brushCursor.style.left = `${x}px`;
+      brushCursor.style.top = `${y}px`;
+      brushCursor.style.width = `${brushSize}px`;
+      brushCursor.style.height = `${brushSize}px`;
+    }
+
+    function drawPoint(e) {
+      const rect = canvas.getBoundingClientRect();
+      const scaleX = canvas.width / rect.width;
+      const scaleY = canvas.height / rect.height;
+      const x = (e.clientX - rect.left) * scaleX;
+      const y = (e.clientY - rect.top) * scaleY;
+
+      ctx.lineWidth = brushSize;
+      ctx.lineCap = 'round';
+      ctx.lineJoin = 'round';
+
+      if (currentTool === 'brush') {
+        ctx.strokeStyle = 'rgba(239, 68, 68, 0.6)';
+        ctx.lineTo(x, y);
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.moveTo(x, y);
+      } else {
+        // Eraser (restore original image)
+        ctx.save();
+        ctx.globalCompositeOperation = 'destination-out';
+        ctx.beginPath();
+        ctx.arc(x, y, brushSize / 2, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+      }
+    }
+
+    function setInpaintTool(tool) {
+      currentTool = tool;
+      document.getElementById('toolBrush').className = `btn ${tool === 'brush' ? 'btn-primary' : 'btn-secondary'}`;
+      document.getElementById('toolEraser').className = `btn ${tool === 'eraser' ? 'btn-primary' : 'btn-secondary'}`;
+      brushCursor.style.borderColor = tool === 'brush' ? 'rgba(239,68,68,0.8)' : 'rgba(56,189,248,0.8)';
+      brushCursor.style.background = tool === 'brush' ? 'rgba(239,68,68,0.2)' : 'rgba(56,189,248,0.2)';
+    }
+
+    function updateBrushSize(val) {
+      brushSize = parseInt(val, 10);
+      document.getElementById('brushSizeDisplay').innerText = `${brushSize}px`;
+    }
+
+    function clearInpaintMask() {
+      const shot = project.shots.find(s => s.id === activeShotId);
+      if (shot) setupInpaintCanvas(shot);
+    }
+
+    function applyInpaintTag(promptText) {
+      document.getElementById('inpaintPromptInput').value = promptText;
+    }
+
+    async function handleSubmitInpaint() {
+      const shot = project.shots.find(s => s.id === activeShotId);
+      if (!shot) return;
+      const cand = shot.end_candidates.find(c => c.id === shot.selected_end_frame_id) || shot.start_candidates[0];
+      const prompt = document.getElementById('inpaintPromptInput').value;
+
+      const btn = document.getElementById('btnSubmitInpaint');
+      btn.disabled = true;
+      btn.innerText = '重绘生成中...';
+
+      try {
+        const updatedShot = await apiFetch(`/api/shots/${shot.id}/inpaint`, {
+          method: 'POST',
+          body: JSON.stringify({
+            candidate_id: cand.id,
+            prompt: prompt,
+            mask_url: "data:image/png;base64,mockMask"
+          })
+        });
+        const idx = project.shots.findIndex(s => s.id === shot.id);
+        if (idx !== -1) project.shots[idx] = updatedShot;
+        await refreshBalanceAndLedger();
+        selectShot(shot.id);
+        switchTab('matrix');
+        alert('局部打回重绘成功！已迭代生成新版本候选帧。');
+      } finally {
+        btn.disabled = false;
+        btn.innerText = '提交局部打回重绘 (Inpaint)';
+      }
+    }
+
+    // --- Bottom Bar Actions ---
+    function updateBottomBarState(shot) {
+      const btnInpaint = document.getElementById('btnSubmitInpaint');
+      const btnApprove = document.getElementById('btnApprove');
+      const btnSynth = document.getElementById('btnSynthesize');
+      const tip = document.getElementById('bottomTipText');
+
+      btnInpaint.style.display = (currentTab === 'inpaint') ? 'inline-flex' : 'none';
+
+      if (shot.status === 'READY') {
+        tip.innerText = '✅ 该镜头视频已完成插值渲染';
+        btnApprove.disabled = true;
+        btnSynth.innerText = '🔄 重新合成视频';
+      } else if (shot.status === 'KEYFRAMES_APPROVED') {
+        tip.innerText = '✨ 起止帧已通过人工核准，可直接渲染视频';
+        btnApprove.disabled = true;
+        btnSynth.innerText = '触发首尾帧插值视频渲染 (Kling I2V)';
+      } else {
+        tip.innerText = '起幅与落幅已就绪，请核准或涂抹打回';
+        btnApprove.disabled = false;
+        btnSynth.innerText = '触发首尾帧插值视频渲染 (Kling I2V)';
+      }
+    }
+
+    async function handleApproveShot() {
+      const shot = project.shots.find(s => s.id === activeShotId);
+      if (!shot) return;
+      const updatedShot = await apiFetch(`/api/shots/${shot.id}/approve`, { method: 'POST' });
+      const idx = project.shots.findIndex(s => s.id === shot.id);
+      if (idx !== -1) project.shots[idx] = updatedShot;
+      selectShot(shot.id);
+      alert('已核准通过起止关键帧！可点击“触发视频渲染”。');
+    }
+
+    async function handleSynthesizeVideo() {
+      const shot = project.shots.find(s => s.id === activeShotId);
+      if (!shot) return;
+
+      const btn = document.getElementById('btnSynthesize');
+      btn.disabled = true;
+      btn.innerText = '🎬 算力合成中 (Kling I2V)...';
+
+      try {
+        const updatedShot = await apiFetch(`/api/shots/${shot.id}/synthesize`, {
+          method: 'POST',
+          body: JSON.stringify({
+            start_frame_id: shot.selected_start_frame_id,
+            end_frame_id: shot.selected_end_frame_id
+          })
+        });
+        const idx = project.shots.findIndex(s => s.id === shot.id);
+        if (idx !== -1) project.shots[idx] = updatedShot;
+        await refreshBalanceAndLedger();
+        selectShot(shot.id);
+        alert('恭喜！首尾帧插值视频渲染就绪，已送达右侧监视器。');
+      } finally {
+        btn.disabled = false;
+        btn.innerText = '触发首尾帧插值视频渲染 (Kling I2V)';
+      }
+    }
+
+    function handleRejectFullShot() {
+      if (confirm('确认驳回当前镜头并重新生成起止候选帧？')) {
+        handleDecompose();
+      }
+    }
+
+    async function handleDecompose() {
+      const text = document.getElementById('screenplayInput').value;
+      if (!text.trim()) return alert('请输入剧本');
+      project = await apiFetch('/api/decompose', {
+        method: 'POST',
+        body: JSON.stringify({ screenplay: text })
+      });
+      await refreshBalanceAndLedger();
+      selectShot(project.shots[0].id);
+      alert('分镜与关键帧已成功更新！');
+    }
+
+    // --- Right Pane: Video Monitor ---
+    function renderVideoMonitor(shot) {
+      const video = document.getElementById('monitorVideo');
+      const placeholder = document.getElementById('monitorPlaceholder');
+      const statusText = document.getElementById('monitorStatusText');
+
+      if (shot.video_url) {
+        placeholder.style.display = 'none';
+        video.style.display = 'block';
+        video.src = shot.video_url;
+      } else {
+        video.style.display = 'none';
+        placeholder.style.display = 'flex';
+        statusText.innerText = (shot.status === 'KEYFRAMES_APPROVED') ? '关键帧已核准，等待插值渲染' : '当前镜头尚未渲染视频';
+      }
+    }
+
+    // --- Tab Switcher ---
+    function switchTab(tabKey) {
+      currentTab = tabKey;
+      document.getElementById('tabBtnMatrix').className = `tab-btn ${tabKey === 'matrix' ? 'active' : ''}`;
+      document.getElementById('tabBtnOnion').className = `tab-btn ${tabKey === 'onion' ? 'active' : ''}`;
+      document.getElementById('tabBtnInpaint').className = `tab-btn ${tabKey === 'inpaint' ? 'active' : ''}`;
+
+      document.getElementById('viewMatrix').style.display = (tabKey === 'matrix') ? 'grid' : 'none';
+      document.getElementById('viewOnion').style.display = (tabKey === 'onion') ? 'flex' : 'none';
+      document.getElementById('viewInpaint').style.display = (tabKey === 'inpaint') ? 'flex' : 'none';
+
+      const shot = project.shots.find(s => s.id === activeShotId);
+      if (shot) {
+        if (tabKey === 'onion') renderOnionView(shot);
+        if (tabKey === 'inpaint') setupInpaintCanvas(shot);
+        updateBottomBarState(shot);
+      }
+    }
+
+    // --- Preset Switcher ---
+    async function switchPreset(presetId) {
+      project = await apiFetch(`/api/project/preset/${presetId}`, { method: 'POST' });
+      await refreshBalanceAndLedger();
+      activeShotId = null;
+      selectShot(project.shots[0].id);
+    }
+
+    // --- Pipelines Hub Modal ---
+    async function openPipelinesModal() {
+      const pipelines = await apiFetch('/api/pipelines');
+      const body = document.getElementById('pipelinesListBody');
+      body.innerHTML = '';
+      pipelines.forEach(p => {
+        const item = document.createElement('div');
+        item.className = 'pipeline-item-card';
+        item.innerHTML = `
+          <h4>${p.filename}</h4>
+          <p>${p.title}</p>
+          <div style="font-size: 11px; color: var(--text-dim); margin-top: 4px;">路径: <code>${p.path}</code></div>
+        `;
+        body.appendChild(item);
+      });
+      document.getElementById('pipelinesModal').classList.add('open');
+    }
+
+    function closePipelinesModal() {
+      document.getElementById('pipelinesModal').classList.remove('open');
+    }
+
+    // Boot
+    window.addEventListener('DOMContentLoaded', initApp);
+  </script>
+</body>
+</html>

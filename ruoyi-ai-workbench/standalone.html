@@ -1,0 +1,1040 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>若依管理系统 - AI 可灵生图工作台</title>
+  <!-- 引入 Element Plus 样式 -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/element-plus@2.8.5/dist/index.css" />
+  <!-- 引入 Element Plus 图标库 -->
+  <script src="https://cdn.jsdelivr.net/npm/vue@3.4.38/dist/vue.global.prod.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/element-plus@2.8.5/dist/index.full.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@element-plus/icons-vue@2.3.1/dist/index.iife.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/axios@1.7.7/dist/axios.min.js"></script>
+
+  <style>
+    :root {
+      --ry-sidebar-bg: #304156;
+      --ry-sidebar-active: #409eff;
+      --ry-sidebar-hover: #263445;
+      --ry-navbar-height: 50px;
+      --ry-bg-page: #f0f2f5;
+    }
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      background-color: var(--ry-bg-page);
+      color: #333;
+      height: 100vh;
+      overflow: hidden;
+    }
+    #app {
+      display: flex;
+      height: 100vh;
+      width: 100vw;
+    }
+
+    /* 侧边栏 (若依经典深蓝风格) */
+    .ry-sidebar {
+      width: 210px;
+      height: 100vh;
+      background-color: var(--ry-sidebar-bg);
+      display: flex;
+      flex-direction: column;
+      flex-shrink: 0;
+      transition: width 0.28s;
+      box-shadow: 2px 0 6px rgba(0, 21, 41, 0.35);
+      z-index: 1001;
+    }
+    .ry-sidebar.collapsed {
+      width: 64px;
+    }
+    .ry-logo {
+      height: 50px;
+      line-height: 50px;
+      background: #2b2f3a;
+      text-align: center;
+      overflow: hidden;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      padding: 0 10px;
+    }
+    .ry-logo-img {
+      width: 30px;
+      height: 30px;
+      border-radius: 6px;
+      background: linear-gradient(135deg, #409eff, #67c23a);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #fff;
+      font-weight: bold;
+      font-size: 16px;
+    }
+    .ry-logo-title {
+      color: #fff;
+      font-weight: 600;
+      font-size: 14px;
+      white-space: nowrap;
+    }
+    .ry-menu {
+      flex: 1;
+      border-right: none;
+      background-color: transparent !important;
+    }
+    .el-menu-item, .el-sub-menu__title {
+      color: #bfcbd9 !important;
+    }
+    .el-menu-item:hover, .el-sub-menu__title:hover {
+      background-color: var(--ry-sidebar-hover) !important;
+      color: #fff !important;
+    }
+    .el-menu-item.is-active {
+      color: #fff !important;
+      background-color: var(--ry-sidebar-active) !important;
+    }
+
+    /* 主体布局 */
+    .ry-container {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    /* 顶部导航栏 */
+    .ry-navbar {
+      height: var(--ry-navbar-height);
+      background: #fff;
+      box-shadow: 0 1px 4px rgba(0, 21, 41, 0.08);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 16px;
+      z-index: 1000;
+    }
+    .navbar-left {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+    }
+    .hamburger-btn {
+      font-size: 20px;
+      cursor: pointer;
+      color: #5a5e66;
+      transition: color 0.3s;
+    }
+    .hamburger-btn:hover {
+      color: #409eff;
+    }
+    .navbar-right {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+    }
+    .user-badge {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 13px;
+      color: #606266;
+    }
+    .user-avatar {
+      width: 30px;
+      height: 30px;
+      border-radius: 50%;
+      background: #409eff;
+      color: #fff;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 12px;
+      font-weight: bold;
+    }
+
+    /* 工作台主内容区 */
+    .ry-main-content {
+      flex: 1;
+      padding: 16px;
+      overflow-y: auto;
+    }
+    .workbench-header-bar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 14px;
+      background: #fff;
+      padding: 12px 20px;
+      border-radius: 8px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+    }
+    .wb-title {
+      font-size: 17px;
+      font-weight: 600;
+      color: #303133;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .wb-subtitle {
+      font-size: 12px;
+      color: #909399;
+      margin-top: 2px;
+    }
+
+    /* 左右分栏 */
+    .control-card, .display-card {
+      border-radius: 8px;
+      min-height: 640px;
+      background: #fff;
+    }
+
+    /* 灵感标签 */
+    .preset-tags-box {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      margin-top: -6px;
+      margin-bottom: 14px;
+    }
+    .preset-tag {
+      cursor: pointer;
+      font-size: 12px;
+      transition: all 0.2s;
+    }
+    .preset-tag:hover {
+      transform: translateY(-1px);
+    }
+
+    /* 参考图上传格 */
+    .ref-images-grid {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-top: 6px;
+    }
+    .ref-img-card {
+      width: 76px;
+      height: 76px;
+      border-radius: 6px;
+      overflow: hidden;
+      position: relative;
+      border: 1px solid #dcdfe6;
+    }
+    .ref-img-thumb {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+    .ref-img-delete {
+      position: absolute;
+      top: 2px;
+      right: 2px;
+      background: rgba(245, 108, 108, 0.9);
+      color: #fff;
+      border-radius: 50%;
+      width: 18px;
+      height: 18px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 12px;
+      cursor: pointer;
+    }
+    .ref-upload-btn {
+      width: 76px;
+      height: 76px;
+      border: 1px dashed #d9d9d9;
+      border-radius: 6px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      background: #fafafa;
+      color: #8c939d;
+      font-size: 11px;
+      transition: border-color 0.2s;
+    }
+    .ref-upload-btn:hover {
+      border-color: #409eff;
+      color: #409eff;
+    }
+
+    /* 画面比例选择器 */
+    .ratio-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 8px;
+    }
+    .ratio-pill {
+      border: 1px solid #dcdfe6;
+      border-radius: 6px;
+      padding: 7px 4px;
+      text-align: center;
+      cursor: pointer;
+      background: #fafafa;
+      transition: all 0.2s;
+    }
+    .ratio-pill:hover {
+      border-color: #409eff;
+    }
+    .ratio-pill.active {
+      border-color: #409eff;
+      background: #ecf5ff;
+      color: #409eff;
+      font-weight: 600;
+    }
+    .ratio-val {
+      font-size: 13px;
+      display: block;
+    }
+    .ratio-desc {
+      font-size: 10px;
+      color: #909399;
+      display: block;
+    }
+
+    /* 立即生成大按钮 */
+    .btn-generate-main {
+      width: 100%;
+      height: 44px;
+      font-size: 15px;
+      font-weight: 600;
+      border-radius: 8px;
+      background: linear-gradient(135deg, #409eff 0%, #634eb8 100%);
+      border: none;
+      box-shadow: 0 4px 12px rgba(64, 158, 255, 0.35);
+      color: #fff;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      transition: all 0.3s;
+    }
+    .btn-generate-main:hover:not(:disabled) {
+      transform: translateY(-1px);
+      box-shadow: 0 6px 16px rgba(64, 158, 255, 0.45);
+    }
+    .btn-generate-main:disabled {
+      opacity: 0.7;
+      cursor: not-allowed;
+    }
+
+    /* 渲染中动效 */
+    .live-render-box {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 50px 20px;
+      text-align: center;
+    }
+    .pulse-glow {
+      width: 64px;
+      height: 64px;
+      border-radius: 50%;
+      background: rgba(64, 158, 255, 0.15);
+      border: 3px solid #409eff;
+      animation: pulseGlow 1.8s infinite ease-in-out;
+      margin-bottom: 20px;
+    }
+    @keyframes pulseGlow {
+      0% { transform: scale(0.9); box-shadow: 0 0 0 0 rgba(64, 158, 255, 0.7); }
+      70% { transform: scale(1.1); box-shadow: 0 0 0 18px rgba(64, 158, 255, 0); }
+      100% { transform: scale(0.9); box-shadow: 0 0 0 0 rgba(64, 158, 255, 0); }
+    }
+
+    /* 成果展示卡片 */
+    .showcase-grid {
+      display: grid;
+      gap: 14px;
+      margin-top: 12px;
+    }
+    .showcase-card {
+      position: relative;
+      border-radius: 8px;
+      overflow: hidden;
+      background: #000;
+      border: 1px solid #ebeef5;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 300px;
+    }
+    .showcase-img {
+      width: 100%;
+      height: 100%;
+      max-height: 480px;
+      object-fit: contain;
+    }
+    .showcase-overlay-actions {
+      position: absolute;
+      bottom: 12px;
+      right: 12px;
+      display: flex;
+      gap: 8px;
+      opacity: 0;
+      transition: opacity 0.2s;
+    }
+    .showcase-card:hover .showcase-overlay-actions {
+      opacity: 1;
+    }
+
+    /* 历史记录卡片 */
+    .history-card-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+      gap: 12px;
+      margin-top: 12px;
+    }
+    .history-card-item {
+      border: 1px solid #ebeef5;
+      border-radius: 6px;
+      overflow: hidden;
+      background: #fff;
+      transition: all 0.2s;
+    }
+    .history-card-item:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 4px 10px rgba(0,0,0,0.08);
+    }
+    .history-thumb-box {
+      height: 120px;
+      background: #f2f6fc;
+      position: relative;
+    }
+    .history-thumb-img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+    .history-info {
+      padding: 8px;
+    }
+    .history-prompt-text {
+      font-size: 11px;
+      color: #303133;
+      line-height: 1.4;
+      height: 30px;
+      overflow: hidden;
+      display: -webkit-box;
+      -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical;
+    }
+    .history-footer {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 4px 8px 6px;
+      border-top: 1px solid #f2f6fc;
+    }
+  </style>
+</head>
+<body>
+  <div id="app">
+    <!-- 1. 左侧若依经典侧边栏 -->
+    <div :class="['ry-sidebar', { collapsed: isCollapse }]">
+      <div class="ry-logo">
+        <div class="ry-logo-img">AI</div>
+        <div v-if="!isCollapse" class="ry-logo-title">若依 AI 管理系统</div>
+      </div>
+
+      <el-menu
+        default-active="ai-image"
+        class="ry-menu"
+        :collapse="isCollapse"
+        background-color="#304156"
+        text-color="#bfcbd9"
+        active-text-color="#ffffff"
+      >
+        <el-menu-item index="home">
+          <el-icon><i class="el-icon-s-home"></i></el-icon>
+          <template #title>系统首页</template>
+        </el-menu-item>
+
+        <el-sub-menu index="ai-center">
+          <template #title>
+            <el-icon><i class="el-icon-magic-stick"></i></el-icon>
+            <span>AI 创作中心</span>
+          </template>
+          <el-menu-item index="ai-image">
+            <el-icon><i class="el-icon-picture"></i></el-icon>
+            <template #title>可灵生图工作台</template>
+          </el-menu-item>
+          <el-menu-item index="ai-video" disabled>
+            <el-icon><i class="el-icon-video-camera"></i></el-icon>
+            <template #title>AI 视频生成 (规划中)</template>
+          </el-menu-item>
+        </el-sub-menu>
+
+        <el-menu-item index="tasks">
+          <el-icon><i class="el-icon-document-copy"></i></el-icon>
+          <template #title>任务调度中心</template>
+        </el-menu-item>
+
+        <el-menu-item index="settings">
+          <el-icon><i class="el-icon-setting"></i></el-icon>
+          <template #title>系统配置</template>
+        </el-menu-item>
+      </el-menu>
+    </div>
+
+    <!-- 2. 右侧主体容器 -->
+    <div class="ry-container">
+      <!-- 顶部 Navbar -->
+      <div class="ry-navbar">
+        <div class="navbar-left">
+          <span class="hamburger-btn" @click="isCollapse = !isCollapse">
+            <i :class="isCollapse ? 'el-icon-s-unfold' : 'el-icon-s-fold'"></i>
+          </span>
+          <el-breadcrumb separator="/">
+            <el-breadcrumb-item>首页</el-breadcrumb-item>
+            <el-breadcrumb-item>AI 创作中心</el-breadcrumb-item>
+            <el-breadcrumb-item>可灵生图工作台</el-breadcrumb-item>
+          </el-breadcrumb>
+        </div>
+
+        <div class="navbar-right">
+          <el-tag size="small" type="success" effect="dark">
+            <i class="el-icon-link"></i> 302.ai API 链路正常
+          </el-tag>
+          <el-tag size="small" type="info">模型: kling-image-o3</el-tag>
+          <div class="user-badge">
+            <div class="user-avatar">AD</div>
+            <span>admin</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- 3. 生图工作台主内容 -->
+      <div class="ry-main-content">
+        <!-- 头部 Banner -->
+        <div class="workbench-header-bar">
+          <div>
+            <div class="wb-title">
+              <i class="el-icon-picture" style="color: #409eff;"></i>
+              可灵图片 O3 旗舰生图工作台
+            </div>
+            <div class="wb-subtitle">支持参考生图、纯文生图、画质与比例微调，已与 Python 后端脚本完成全链路联调</div>
+          </div>
+          <div>
+            <el-button size="small" icon="el-icon-refresh" @click="loadHistory">刷新画廊</el-button>
+          </div>
+        </div>
+
+        <!-- 核心栅格：左参数面板，右画作展台 -->
+        <el-row :gutter="16">
+          <!-- 左侧：参数控制面板 -->
+          <el-col :xs="24" :sm="24" :md="10" :lg="10">
+            <el-card shadow="never" class="control-card">
+              <template #header>
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                  <span style="font-weight: 600;"><i class="el-icon-edit-outline"></i> 创作参数配置</span>
+                  <el-button type="text" size="small" @click="resetForm">清空</el-button>
+                </div>
+              </template>
+
+              <el-form label-position="top" size="small">
+                <!-- 提示词输入 -->
+                <el-form-item label="生图提示词 (Prompt)">
+                  <el-input
+                    v-model="form.prompt"
+                    type="textarea"
+                    :rows="4"
+                    placeholder="输入详细的生图画面描述，例如：电影镜头特写，雨夜古风剑客，月光洒在长剑，水滴溅起墨花，4k高清..."
+                    maxlength="1000"
+                    show-word-limit
+                  />
+                </el-form-item>
+
+                <!-- 灵感快捷词 -->
+                <div class="preset-tags-box">
+                  <span style="font-size: 11px; color: #909399;">灵感预设: </span>
+                  <el-tag
+                    v-for="(t, idx) in presets"
+                    :key="idx"
+                    size="small"
+                    class="preset-tag"
+                    @click="appendPreset(t.text)"
+                  >
+                    {{ t.name }}
+                  </el-tag>
+                </div>
+
+                <!-- 参考图 (图生图) -->
+                <el-form-item label="参考图 (可选，支持本地图片上传至 302 图床，1-10张)">
+                  <div class="ref-images-grid">
+                    <div v-for="(img, idx) in form.referenceImages" :key="idx" class="ref-img-card">
+                      <img :src="img" class="ref-img-thumb" />
+                      <div class="ref-img-delete" @click="removeRefImage(idx)">×</div>
+                    </div>
+
+                    <div v-if="form.referenceImages.length < 10" class="ref-upload-btn" @click="triggerFileInput">
+                      <i v-if="!uploading" class="el-icon-plus" style="font-size: 18px; margin-bottom: 2px;"></i>
+                      <i v-else class="el-icon-loading" style="font-size: 18px; margin-bottom: 2px;"></i>
+                      <span>{{ uploading ? '上传中' : '传参考图' }}</span>
+                    </div>
+                  </div>
+                  <input type="file" ref="fileInput" style="display: none;" accept="image/*" @change="onFileSelected" />
+                  <div style="font-size: 11px; color: #909399; margin-top: 4px;">本地参考图将自动上传至 302.ai 图床并回填 URL。</div>
+                </el-form-item>
+
+                <!-- 画面比例 -->
+                <el-form-item label="画面比例 (Aspect Ratio)">
+                  <div class="ratio-grid">
+                    <div
+                      v-for="r in aspectRatios"
+                      :key="r.value"
+                      :class="['ratio-pill', { active: form.aspectRatio === r.value }]"
+                      @click="form.aspectRatio = r.value"
+                    >
+                      <span class="ratio-val">{{ r.label }}</span>
+                      <span class="ratio-desc">{{ r.desc }}</span>
+                    </div>
+                  </div>
+                </el-form-item>
+
+                <!-- 画质分辨率与张数 -->
+                <el-row :gutter="10">
+                  <el-col :span="12">
+                    <el-form-item label="画质分辨率">
+                      <el-select v-model="form.imgResolution" style="width: 100%;">
+                        <el-option label="1K 标准 (0.028 PTC)" value="1k" />
+                        <el-option label="2K 高清 (0.028 PTC)" value="2k" />
+                        <el-option label="4K 超清 (0.056 PTC)" value="4k" />
+                      </el-select>
+                    </el-form-item>
+                  </el-col>
+                  <el-col :span="12">
+                    <el-form-item label="生成张数">
+                      <el-select v-model="form.imageCount" style="width: 100%;">
+                        <el-option label="1 张" :value="1" />
+                        <el-option label="2 张" :value="2" />
+                        <el-option label="3 张" :value="3" />
+                        <el-option label="4 张" :value="4" />
+                      </el-select>
+                    </el-form-item>
+                  </el-col>
+                </el-row>
+
+                <!-- 连贯组图模式开关 -->
+                <el-form-item>
+                  <div style="display: flex; justify-content: space-between; align-items: center;">
+                    <div>
+                      <span style="font-weight: 600;">组图连贯模式 (Story Mode)</span>
+                      <div style="font-size: 11px; color: #909399;">生成系列分镜连续画面</div>
+                    </div>
+                    <el-switch v-model="form.storyMode" />
+                  </div>
+                </el-form-item>
+
+                <!-- 提交按钮 -->
+                <div style="margin-top: 15px;">
+                  <button
+                    type="button"
+                    class="btn-generate-main"
+                    :disabled="generating"
+                    @click="startGenerate"
+                  >
+                    <i v-if="generating" class="el-icon-loading"></i>
+                    <i v-else class="el-icon-picture"></i>
+                    <span>{{ generating ? `可灵 AI 渲染中 (${elapsedSeconds}s)...` : '立即生成画作' }}</span>
+                  </button>
+                </div>
+              </el-form>
+            </el-card>
+          </el-col>
+
+          <!-- 右侧：展台与历史画廊 -->
+          <el-col :xs="24" :sm="24" :md="14" :lg="14">
+            <el-card shadow="never" class="display-card">
+              <el-tabs v-model="activeTab">
+                <!-- Tab 1: 当前画作展台 -->
+                <el-tab-pane label="当前画作展台" name="canvas">
+                  <!-- 1. 渲染中 -->
+                  <div v-if="generating" class="live-render-box">
+                    <div class="pulse-glow"></div>
+                    <h3 style="margin-bottom: 8px;">可灵 O3 神经扩散渲染中...</h3>
+                    <p style="font-size: 13px; color: #606266; font-style: italic; max-width: 450px; margin-bottom: 12px;">"{{ form.prompt }}"</p>
+                    <p style="font-size: 12px; color: #909399; margin-bottom: 12px;">任务 ID: <code>{{ currentTaskId }}</code> | 已耗时: {{ elapsedSeconds }} 秒</p>
+                    <div style="width: 80%; max-width: 400px; margin-bottom: 8px;">
+                      <el-progress :percentage="progressPercent" :status="progressPercent === 100 ? 'success' : ''" />
+                    </div>
+                    <p style="font-size: 12px; color: #409eff;">{{ stageTip }}</p>
+                  </div>
+
+                  <!-- 2. 生成成果展示 -->
+                  <div v-else-if="currentResult && currentResult.result_images && currentResult.result_images.length > 0">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; border-bottom: 1px solid #eee; padding-bottom: 10px;">
+                      <div style="display: flex; gap: 6px;">
+                        <el-tag size="small" type="success">生成成功</el-tag>
+                        <el-tag size="small" type="info">比例: {{ currentResult.aspect_ratio }}</el-tag>
+                        <el-tag size="small" type="info">画质: {{ currentResult.img_resolution }}</el-tag>
+                        <el-tag size="small" type="info">耗时: {{ (currentResult.cost_time / 1000).toFixed(1) }}s</el-tag>
+                      </div>
+                      <el-button size="small" icon="el-icon-document-copy" @click="copyText(currentResult.prompt)">复制提示词</el-button>
+                    </div>
+
+                    <div class="showcase-grid">
+                      <div v-for="(imgUrl, i) in currentResult.result_images" :key="i" class="showcase-card">
+                        <img :src="imgUrl" class="showcase-img" />
+                        <div class="showcase-overlay-actions">
+                          <el-button size="small" circle icon="el-icon-download" @click="downloadUrl(imgUrl, i)" title="下载图片" />
+                          <el-button size="small" circle icon="el-icon-link" @click="copyText(imgUrl)" title="复制链接" />
+                          <el-button size="small" circle icon="el-icon-plus" @click="useAsRef(imgUrl)" title="设为参考图" />
+                        </div>
+                      </div>
+                    </div>
+
+                    <div style="margin-top: 14px; font-size: 12px; color: #606266; background: #fafafa; padding: 10px; border-radius: 6px;">
+                      <strong>Prompt:</strong> {{ currentResult.prompt }}
+                    </div>
+                  </div>
+
+                  <!-- 3. 空展台 -->
+                  <div v-else style="display: flex; flex-direction: column; align-items: center; justify-content: center; height: 450px; color: #909399;">
+                    <i class="el-icon-picture-outline" style="font-size: 54px; margin-bottom: 12px; color: #c0c4cc;"></i>
+                    <p style="font-size: 15px; font-weight: 600; color: #606266; margin-bottom: 4px;">画台准备就绪</p>
+                    <p style="font-size: 12px; color: #909399;">在左侧输入提示词，点击「立即生成画作」，即可见证 AI 灵感绽放</p>
+                  </div>
+                </el-tab-pane>
+
+                <!-- Tab 2: 历史创作画廊 -->
+                <el-tab-pane label="历史创作画廊" name="history">
+                  <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                    <el-input v-model="searchPrompt" placeholder="搜索提示词关键词..." size="small" style="width: 240px;" clearable @change="loadHistory" />
+                    <span style="font-size: 12px; color: #909399;">共 {{ historyTotal }} 篇创作记录</span>
+                  </div>
+
+                  <div v-if="historyList.length > 0" class="history-card-grid">
+                    <div v-for="item in historyList" :key="item.task_id" class="history-card-item">
+                      <div class="history-thumb-box">
+                        <img v-if="item.result_images && item.result_images.length > 0" :src="item.result_images[0]" class="history-thumb-img" />
+                        <div v-else style="display: flex; align-items: center; justify-content: center; height: 100%; font-size: 11px; color: #909399;">
+                          {{ item.task_status === 'failed' ? '生成失败' : '排队中' }}
+                        </div>
+                      </div>
+                      <div class="history-info">
+                        <div class="history-prompt-text" :title="item.prompt">{{ item.prompt }}</div>
+                        <div style="display: flex; justify-content: space-between; font-size: 10px; color: #909399; margin-top: 4px;">
+                          <span>{{ item.aspect_ratio }} | {{ item.img_resolution }}</span>
+                          <span>{{ item.create_time ? item.create_time.slice(5, 16) : '' }}</span>
+                        </div>
+                      </div>
+                      <div class="history-footer">
+                        <el-button type="text" size="small" @click="reuseTask(item)">复用</el-button>
+                        <el-button type="text" size="small" style="color: #f56c6c;" @click="deleteTask(item.task_id)">删除</el-button>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div v-else style="text-align: center; padding: 60px 0; color: #909399;">
+                    <i class="el-icon-folder-opened" style="font-size: 40px; margin-bottom: 8px;"></i>
+                    <p style="font-size: 13px;">暂无历史记录</p>
+                  </div>
+                </el-tab-pane>
+              </el-tabs>
+            </el-card>
+          </el-col>
+        </el-row>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const { createApp, ref, reactive, computed, onMounted, onBeforeUnmount } = Vue;
+
+    const app = createApp({
+      setup() {
+        const isCollapse = ref(false);
+        const activeTab = ref('canvas');
+
+        // 表单数据
+        const form = reactive({
+          prompt: '',
+          referenceImages: [],
+          aspectRatio: '1:1',
+          imgResolution: '1k',
+          imageCount: 1,
+          storyMode: false
+        });
+
+        // 灵感预设
+        const presets = [
+          { name: '🔥 赛博朋克', text: '，赛博朋克未来科幻都市，霓虹雨夜，雨水倒影，虚幻引擎5渲染，8k极高细节' },
+          { name: '🗡️ 武侠国风', text: '，国风水墨古韵写意，白衣飘逸剑客，剑气纵横，山水云雾缭绕，电影级构图' },
+          { name: '🎥 电影写实', text: '，长焦电影镜头特写，浅景深虚化，丁达尔光线，胶片颗粒质感，杰作，超逼真' },
+          { name: '🐲 上古神兽', text: '，山海经上古巨兽，黑曜石熔岩铠甲，雷电交加，震撼磅礴压迫感，暗黑奇幻风格' },
+          { name: '✨ 唯美二次元', text: '，精美新海诚动漫风格，绚丽天空极光，樱花花瓣飘落，治愈系逆光' }
+        ];
+
+        // 比例
+        const aspectRatios = [
+          { label: '1:1', desc: '方形头像', value: '1:1' },
+          { label: '16:9', desc: '电影横屏', value: '16:9' },
+          { label: '9:16', desc: '短视频竖屏', value: '9:16' },
+          { label: '4:3', desc: '经典画幅', value: '4:3' },
+          { label: '3:4', desc: '竖向构图', value: '3:4' },
+          { label: '3:2', desc: '单反相机', value: '3:2' },
+          { label: '2:3', desc: '立绘海报', value: '2:3' },
+          { label: 'auto', desc: '自适应', value: 'auto' }
+        ];
+
+        // 状态
+        const generating = ref(false);
+        const uploading = ref(false);
+        const currentTaskId = ref('');
+        const elapsedSeconds = ref(0);
+        const currentResult = ref(null);
+        let timer = null;
+        let pollTimer = null;
+
+        // 历史
+        const historyList = ref([]);
+        const historyTotal = ref(0);
+        const searchPrompt = ref('');
+        const fileInput = ref(null);
+
+        // 进度与文案
+        const progressPercent = computed(() => {
+          if (!generating.value) return 100;
+          if (elapsedSeconds.value < 5) return 25;
+          if (elapsedSeconds.value < 12) return 55;
+          if (elapsedSeconds.value < 22) return 80;
+          return 92;
+        });
+
+        const stageTip = computed(() => {
+          if (elapsedSeconds.value < 5) return '正在连接 302.ai 可灵 O3 生图集群...';
+          if (elapsedSeconds.value < 15) return '可灵神经扩散降噪渲染与语义对齐中...';
+          if (elapsedSeconds.value < 25) return '超分辨率高清画质重构与色彩增强中...';
+          return '渲染完毕，正在抓取并同步图片...';
+        });
+
+        const appendPreset = (text) => {
+          form.prompt = (form.prompt + text).trim();
+        };
+
+        const resetForm = () => {
+          form.prompt = '';
+          form.referenceImages = [];
+          form.aspectRatio = '1:1';
+          form.imgResolution = '1k';
+          form.imageCount = 1;
+          form.storyMode = false;
+        };
+
+        const triggerFileInput = () => {
+          if (fileInput.value) fileInput.value.click();
+        };
+
+        const onFileSelected = async (e) => {
+          const file = e.target.files[0];
+          if (!file) return;
+          uploading.value = true;
+          const fd = new FormData();
+          fd.append('file', file);
+          try {
+            const res = await axios.post('/api/image/upload-reference', fd);
+            if (res.data.code === 200 && res.data.url) {
+              form.referenceImages.push(res.data.url);
+              ElementPlus.ElMessage.success('参考图上传成功并同步至 302 图床！');
+            } else {
+              ElementPlus.ElMessage.error(res.data.msg || '上传失败');
+            }
+          } catch (err) {
+            ElementPlus.ElMessage.error('上传网络错误: ' + err.message);
+          } finally {
+            uploading.value = false;
+            e.target.value = '';
+          }
+        };
+
+        const removeRefImage = (idx) => {
+          form.referenceImages.splice(idx, 1);
+        };
+
+        const startGenerate = async () => {
+          if (!form.prompt.trim()) {
+            ElementPlus.ElMessage.warning('请输入生图提示词');
+            return;
+          }
+
+          generating.value = true;
+          elapsedSeconds.value = 0;
+          activeTab.value = 'canvas';
+          currentResult.value = null;
+
+          timer = setInterval(() => {
+            elapsedSeconds.value++;
+          }, 1000);
+
+          try {
+            const res = await axios.post('/api/image/generate', {
+              prompt: form.prompt,
+              reference_images: form.referenceImages,
+              aspect_ratio: form.aspectRatio,
+              img_resolution: form.imgResolution,
+              image_count: form.imageCount,
+              story_mode: form.storyMode
+            });
+
+            if (res.data.code === 200 && res.data.data.task_id) {
+              currentTaskId.value = res.data.data.task_id;
+              ElementPlus.ElMessage.success('任务提交成功，正在实时渲染...');
+              startPolling(res.data.data.task_id);
+            } else {
+              stopGenerating();
+              ElementPlus.ElMessage.error(res.data.msg || '提交任务失败');
+            }
+          } catch (err) {
+            stopGenerating();
+            ElementPlus.ElMessage.error('提交失败: ' + (err.response?.data?.detail || err.message));
+          }
+        };
+
+        const startPolling = (taskId) => {
+          pollTimer = setInterval(async () => {
+            try {
+              const res = await axios.get(`/api/image/task/${taskId}`);
+              if (res.data.code === 200 && res.data.data) {
+                const task = res.data.data;
+                if (task.task_status === 'succeed') {
+                  stopGenerating();
+                  currentResult.value = task;
+                  ElementPlus.ElMessage.success('🎉 画作渲染成功完成！');
+                  loadHistory();
+                } else if (task.task_status === 'failed') {
+                  stopGenerating();
+                  ElementPlus.ElMessage.error('生图失败: ' + (task.status_msg || '模型异常'));
+                  loadHistory();
+                }
+              }
+            } catch (err) {
+              console.warn('轮询异常', err);
+            }
+          }, 3000);
+        };
+
+        const stopGenerating = () => {
+          generating.value = false;
+          if (timer) clearInterval(timer);
+          if (pollTimer) clearInterval(pollTimer);
+        };
+
+        const copyText = (txt) => {
+          navigator.clipboard.writeText(txt).then(() => {
+            ElementPlus.ElMessage.success('已复制到剪贴板！');
+          });
+        };
+
+        const downloadUrl = (url, i) => {
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = `kling_o3_${Date.now()}_${i+1}.png`;
+          a.target = '_blank';
+          document.body.appendChild(a);
+          a.click();
+          document.body.removeChild(a);
+        };
+
+        const useAsRef = (url) => {
+          if (form.referenceImages.length >= 10) {
+            ElementPlus.ElMessage.warning('参考图数量最多 10 张');
+            return;
+          }
+          form.referenceImages.push(url);
+          ElementPlus.ElMessage.success('已添加到参考图列表！');
+        };
+
+        const loadHistory = async () => {
+          try {
+            const res = await axios.get('/api/image/tasks', {
+              params: { prompt: searchPrompt.value, pageSize: 24 }
+            });
+            if (res.data.code === 200) {
+              historyList.value = res.data.rows || [];
+              historyTotal.value = res.data.total || 0;
+            }
+          } catch (err) {
+            console.warn('加载历史异常', err);
+          }
+        };
+
+        const reuseTask = (item) => {
+          form.prompt = item.prompt;
+          form.aspectRatio = item.aspect_ratio || '1:1';
+          form.imgResolution = item.img_resolution || '1k';
+          form.imageCount = item.image_count || 1;
+          form.storyMode = !!item.story_mode;
+          if (item.reference_images && item.reference_images.length > 0) {
+            form.referenceImages = [...item.reference_images];
+          }
+          activeTab.value = 'canvas';
+          ElementPlus.ElMessage.info('已将参数回填至控制台！');
+        };
+
+        const deleteTask = async (taskId) => {
+          try {
+            await axios.delete(`/api/image/task/${taskId}`);
+            ElementPlus.ElMessage.success('删除成功');
+            loadHistory();
+          } catch (err) {
+            ElementPlus.ElMessage.error('删除失败');
+          }
+        };
+
+        onMounted(() => {
+          loadHistory();
+        });
+
+        onBeforeUnmount(() => {
+          stopGenerating();
+        });
+
+        return {
+          isCollapse,
+          activeTab,
+          form,
+          presets,
+          aspectRatios,
+          generating,
+          uploading,
+          currentTaskId,
+          elapsedSeconds,
+          currentResult,
+          progressPercent,
+          stageTip,
+          historyList,
+          historyTotal,
+          searchPrompt,
+          fileInput,
+          appendPreset,
+          resetForm,
+          triggerFileInput,
+          onFileSelected,
+          removeRefImage,
+          startGenerate,
+          copyText,
+          downloadUrl,
+          useAsRef,
+          loadHistory,
+          reuseTask,
+          deleteTask
+        };
+      }
+    });
+
+    app.use(ElementPlus);
+    app.mount('#app');
+  </script>
+</body>
+</html>

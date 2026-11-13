@@ -1,0 +1,44 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Pytest / Coverage / Caches
+.pytest_cache/
+.deepeval/
+.cache/
+*.log
+
+# Node dependencies & caches
+node_modules/
+ruoyi-ai-workbench/node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Environments & sensitive keys
+.env
+.env.local
+*.local
+.venv
+env/
+venv/
+ENV/
+
+# Generated outputs & temporary files
+data/outputs/
+data/uploads/
+*_output/
+*_assets/
+extracted_frames/
+rendered_clips/
+
+# Media filters (ignore video/audio caches in root/scripts)
+*.mp4
+*.wav
+*.mp3
+*.aac
+
+# Whitelist visual assets
+!IP视觉资产库/**
+!Reference picture/**

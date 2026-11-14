@@ -28,6 +28,9 @@ ENV/
 # Generated outputs & temporary files
 data/outputs/
 data/uploads/
+*.db
+*.sqlite
+*.sqlite3
 *_output/
 *_assets/
 extracted_frames/

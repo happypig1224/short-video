@@ -437,10 +437,14 @@ const props = defineProps({
   currentTheme: {
     type: String,
     default: 'light'
+  },
+  currentUser: {
+    type: Object,
+    default: () => ({})
   }
 })
 
-const emit = defineEmits(['switch-view', 'open-model-picker', 'model-change'])
+const emit = defineEmits(['switch-view', 'open-model-picker', 'model-change', 'task-created'])
 
 const emitSwitchView = (v) => emit('switch-view', v)
 
@@ -647,9 +651,11 @@ const startGenerate = async () => {
       model_id: props.currentModel.id
     })
 
-    if (res.data && res.data.task_id) {
-      currentTaskId.value = res.data.task_id
-      startPolling(res.data.task_id)
+    const payload = res.data?.data || res.data
+    if (payload && payload.task_id) {
+      currentTaskId.value = payload.task_id
+      emit('task-created')
+      startPolling(payload.task_id)
     } else {
       throw new Error('未返回任务 ID')
     }

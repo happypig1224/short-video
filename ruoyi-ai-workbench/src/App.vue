@@ -1,6 +1,13 @@
 <template>
-  <div :class="['studio-app-shell', `theme-${currentTheme}`]">
-    <!-- 极简高质感顶部导航栏 (Apple Native / Linear Style) -->
+  <!-- 未登录状态：全屏展示若依风格登录认证页 -->
+  <LoginPage
+    v-if="!isLoggedIn"
+    @login-success="handleLoginSuccess"
+  />
+
+  <!-- 已登录状态：展示完整若依 AI 生图工作台系统 -->
+  <div v-else :class="['studio-app-shell', `theme-${currentTheme}`]">
+    <!-- 极简高质感顶部导航栏 -->
     <header class="studio-topbar">
       <!-- 左侧：品牌与模型快速切换 -->
       <div class="topbar-left">
@@ -44,8 +51,24 @@
         </div>
       </div>
 
-      <!-- 右侧：主题模式切换与接口配置 -->
+      <!-- 右侧：算力账户、用户信息、主题切换与退出登录 -->
       <div class="topbar-right">
+        <!-- 算力额度徽标 -->
+        <div class="credits-badge" title="当前可用生图算力点数">
+          <span class="credits-bolt">⚡</span>
+          <span class="credits-label">算力</span>
+          <span class="credits-val">{{ currentUser.credits !== undefined ? currentUser.credits : 9999 }}</span>
+        </div>
+
+        <!-- 用户身份标识 -->
+        <div class="user-chip">
+          <el-avatar :size="24" :src="currentUser.avatar || 'https://cube.elemecdn.com/0/88/03b0d39583f48206768a7534e55bcpng.png'" />
+          <span class="user-nickname">{{ currentUser.nickname || currentUser.username || '管理员' }}</span>
+          <span class="user-role-tag">{{ currentUser.role === 'admin' ? '主管' : '成员' }}</span>
+        </div>
+
+        <div class="topbar-divider-mini"></div>
+
         <!-- 浅色/深色主题切换 -->
         <button
           class="topbar-icon-btn"
@@ -62,6 +85,11 @@
         <button class="topbar-icon-btn" title="服务与接口设置" @click="settingsDrawerVisible = true">
           <el-icon :size="15"><Setting /></el-icon>
         </button>
+
+        <!-- 退出登录按钮 -->
+        <button class="topbar-icon-btn btn-logout" title="退出登录" @click="handleLogout">
+          <el-icon :size="15"><SwitchButton /></el-icon>
+        </button>
       </div>
     </header>
 
@@ -73,9 +101,11 @@
         :current-model="currentModel"
         :available-models="availableModels"
         :current-theme="currentTheme"
+        :current-user="currentUser"
         @switch-view="activeView = $event"
         @open-model-picker="openModelPicker"
         @model-change="handleModelSelected"
+        @task-created="refreshUserProfile"
       />
     </main>
 
@@ -156,6 +186,10 @@
     >
       <div class="drawer-inner-body">
         <el-form label-position="top">
+          <el-form-item label="当前账号">
+            <el-input :model-value="`${currentUser.nickname || '管理员'} (${currentUser.username || 'admin'})`" disabled />
+          </el-form-item>
+
           <el-form-item label="当前模型">
             <el-input :model-value="`${currentModel.name}`" disabled />
           </el-form-item>
@@ -185,8 +219,10 @@
           <el-divider />
 
           <div class="sys-meta-block">
+            <div class="sys-row"><span>认证状态</span><code style="color:#10b981;">已登录 (JWT Bearer)</code></div>
             <div class="sys-row"><span>已载入模型</span><code>{{ availableModels.length }} 个</code></div>
             <div class="sys-row"><span>生图核心</span><code>快手可灵 O3 / 302.ai API</code></div>
+            <div class="sys-row"><span>数据库存储</span><code>SQLite (workbench.db)</code></div>
             <div class="sys-row"><span>接口文档</span><a href="/docs" target="_blank">/docs</a></div>
           </div>
         </el-form>
@@ -196,7 +232,7 @@
 </template>
 
 <script setup>
-import { ref, reactive, computed, onMounted } from 'vue'
+import { ref, reactive, computed, onMounted, onBeforeUnmount } from 'vue'
 import {
   Monitor,
   Collection,
@@ -205,11 +241,24 @@ import {
   Refresh,
   Search,
   Sunny,
-  Moon
+  Moon,
+  SwitchButton
 } from '@element-plus/icons-vue'
-import { ElMessage } from 'element-plus'
+import { ElMessage, ElMessageBox } from 'element-plus'
+import LoginPage from './views/login/index.vue'
 import ImageWorkbench from './views/image/index.vue'
-import { getSystemInfo, updateSystemConfig, list302Models } from './api/image.js'
+import {
+  getCurrentUser,
+  logout,
+  getSystemInfo,
+  updateSystemConfig,
+  list302Models
+} from './api/image.js'
+
+// 用户登录鉴权状态
+const token = ref(localStorage.getItem('token') || '')
+const isLoggedIn = ref(!!token.value)
+const currentUser = ref(JSON.parse(localStorage.getItem('userInfo') || '{}'))
 
 // 主题模式：默认浅色 light
 const currentTheme = ref(localStorage.getItem('studio_theme') || 'light')
@@ -268,6 +317,57 @@ const filteredModelList = computed(() => {
   return list
 })
 
+// 登录成功回调
+const handleLoginSuccess = async (data) => {
+  token.value = data.token
+  currentUser.value = data.user || {}
+  isLoggedIn.value = true
+  await initWorkbenchData()
+}
+
+// 刷新用户信息及剩余算力
+const refreshUserProfile = async () => {
+  try {
+    const res = await getCurrentUser()
+    const payload = res?.data?.data || res?.data
+    if (payload) {
+      currentUser.value = payload
+      localStorage.setItem('userInfo', JSON.stringify(payload))
+    }
+  } catch (e) {
+    console.warn('刷新用户信息失败', e)
+  }
+}
+
+// 安全退出登录
+const handleLogout = () => {
+  ElMessageBox.confirm('确定要退出登录系统吗？', '提示', {
+    confirmButtonText: '确定退出',
+    cancelButtonText: '取消',
+    type: 'warning'
+  }).then(async () => {
+    try {
+      await logout()
+    } catch (e) {}
+    localStorage.removeItem('token')
+    localStorage.removeItem('userInfo')
+    token.value = ''
+    currentUser.value = {}
+    isLoggedIn.value = false
+    ElMessage.success('已安全退出')
+  }).catch(() => {})
+}
+
+// 监听 401 拦截事件
+const handleUnauthorized = () => {
+  if (isLoggedIn.value) {
+    isLoggedIn.value = false
+    token.value = ''
+    currentUser.value = {}
+    ElMessage.warning('登录已失效，请重新登录')
+  }
+}
+
 const openModelPicker = () => {
   modelPickerVisible.value = true
   if (availableModels.value.length === 0 && !refreshingModels.value) {
@@ -315,7 +415,6 @@ const refreshModelsLive = async () => {
     }
   } catch (e) {
     console.error('拉取模型失败', e)
-    ElMessage.warning('拉取模型失败，使用本地预设')
   } finally {
     refreshingModels.value = false
   }
@@ -372,7 +471,8 @@ const testConnection = async () => {
   }
 }
 
-onMounted(async () => {
+const initWorkbenchData = async () => {
+  await refreshUserProfile()
   await loadSystemInfo()
   try {
     const res = await list302Models(false)
@@ -392,6 +492,17 @@ onMounted(async () => {
   } catch (e) {
     console.error('初始加载模型失败', e)
   }
+}
+
+onMounted(async () => {
+  window.addEventListener('auth:unauthorized', handleUnauthorized)
+  if (isLoggedIn.value) {
+    await initWorkbenchData()
+  }
+})
+
+onBeforeUnmount(() => {
+  window.removeEventListener('auth:unauthorized', handleUnauthorized)
 })
 </script>
 
@@ -408,7 +519,7 @@ onMounted(async () => {
   transition: background-color 0.15s ease, color 0.15s ease;
 }
 
-/* 浅色主题 Light (Apple / Linear Neutral) */
+/* 浅色主题 Light */
 .studio-app-shell.theme-light {
   background-color: #fafafa;
   color: #18181b;
@@ -428,7 +539,7 @@ onMounted(async () => {
   --control-border: #e4e4e7;
 }
 
-/* 深色主题 Dark (Apple / Linear Dark Neutral) */
+/* 深色主题 Dark */
 .studio-app-shell.theme-dark {
   background-color: #09090b;
   color: #f4f4f5;
@@ -448,17 +559,17 @@ onMounted(async () => {
   --control-border: #27272a;
 }
 
-/* 顶部导航栏 (46px macOS 级别紧凑高度) */
+/* 顶部导航栏 Topbar */
 .studio-topbar {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  height: 46px;
+  height: 48px;
   padding: 0 16px;
   background-color: var(--topbar-bg);
   border-bottom: 1px solid var(--topbar-border);
-  flex-shrink: 0;
-  z-index: 50;
+  z-index: 100;
+  user-select: none;
 }
 
 .topbar-left {
@@ -471,7 +582,6 @@ onMounted(async () => {
   display: flex;
   align-items: center;
   gap: 8px;
-  user-select: none;
 }
 
 .brand-logo-icon {
@@ -480,29 +590,35 @@ onMounted(async () => {
   justify-content: center;
   width: 22px;
   height: 22px;
-  border-radius: 5px;
-  background-color: var(--text-primary);
-  color: var(--topbar-bg);
+  color: var(--accent-color);
 }
 
 .brand-logo-icon svg {
-  width: 14px;
-  height: 14px;
+  width: 100%;
+  height: 100%;
 }
 
 .brand-name {
-  font-size: 13px;
-  font-weight: 600;
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: -0.3px;
   color: var(--text-primary);
-  letter-spacing: -0.01em;
 }
 
 .topbar-divider {
   width: 1px;
-  height: 14px;
-  background-color: var(--topbar-border);
+  height: 16px;
+  background-color: var(--control-border);
 }
 
+.topbar-divider-mini {
+  width: 1px;
+  height: 14px;
+  background-color: var(--control-border);
+  margin: 0 2px;
+}
+
+/* 模型选择器按钮 */
 .topbar-model-btn {
   display: flex;
   align-items: center;
@@ -579,7 +695,62 @@ onMounted(async () => {
 .topbar-right {
   display: flex;
   align-items: center;
+  gap: 8px;
+}
+
+/* 算力额度徽标 */
+.credits-badge {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  background: rgba(245, 158, 11, 0.12);
+  color: #d97706;
+  border: 1px solid rgba(245, 158, 11, 0.25);
+  padding: 3px 8px;
+  border-radius: 12px;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.credits-bolt {
+  font-size: 12px;
+}
+
+.credits-label {
+  opacity: 0.85;
+}
+
+.credits-val {
+  font-family: ui-monospace, SFMono-Regular, monospace;
+}
+
+/* 用户 Chip */
+.user-chip {
+  display: flex;
+  align-items: center;
   gap: 6px;
+  padding: 2px 6px 2px 2px;
+  border-radius: 14px;
+  background: var(--control-bg);
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.user-nickname {
+  color: var(--text-primary);
+  max-width: 90px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.user-role-tag {
+  font-size: 10px;
+  padding: 1px 5px;
+  border-radius: 4px;
+  background: var(--accent-light);
+  color: var(--accent-color);
+  font-weight: 600;
 }
 
 .topbar-icon-btn {
@@ -601,6 +772,11 @@ onMounted(async () => {
   color: var(--text-primary);
 }
 
+.btn-logout:hover {
+  background-color: rgba(239, 68, 68, 0.12);
+  color: #ef4444;
+}
+
 /* 主工作区 Viewport Body */
 .studio-viewport-body {
   flex: 1;
@@ -620,154 +796,161 @@ onMounted(async () => {
   font-weight: 600;
 }
 
-.minimal-dialog :deep(.el-dialog__body) {
-  padding: 8px 20px 20px;
+.model-picker-modal-content {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  max-height: 480px;
 }
 
 .model-search-filter-bar {
   display: flex;
   gap: 8px;
-  margin-bottom: 10px;
+  align-items: center;
 }
 
 .btn-refresh-models {
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  padding: 0 10px;
-  background: transparent;
+  padding: 8px 12px;
+  border-radius: 6px;
   border: 1px solid var(--control-border);
-  border-radius: 5px;
+  background-color: var(--control-bg);
+  color: var(--text-primary);
   font-size: 12px;
-  color: var(--text-secondary);
   cursor: pointer;
   white-space: nowrap;
 }
 
-.btn-refresh-models:hover {
-  color: var(--text-primary);
-  border-color: var(--text-primary);
+.btn-refresh-models:hover:not(:disabled) {
+  background-color: var(--control-hover);
 }
 
 .vendor-filter-chips {
   display: flex;
   flex-wrap: wrap;
-  gap: 5px;
-  margin-bottom: 12px;
+  gap: 6px;
 }
 
 .vendor-chip {
-  padding: 3px 9px;
-  background-color: var(--control-bg);
-  border: none;
-  border-radius: 12px;
+  padding: 4px 10px;
   font-size: 11px;
+  border-radius: 12px;
+  border: 1px solid var(--control-border);
+  background-color: var(--control-bg);
   color: var(--text-secondary);
   cursor: pointer;
   transition: all 0.12s ease;
 }
 
-.vendor-chip:hover {
-  color: var(--text-primary);
-}
-
 .vendor-chip.active {
-  background-color: var(--text-primary);
-  color: var(--topbar-bg);
-  font-weight: 500;
+  background-color: var(--accent-color);
+  color: #ffffff;
+  border-color: var(--accent-color);
 }
 
 .models-card-scroll-grid {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
-  gap: 8px;
-  max-height: 380px;
+  gap: 10px;
   overflow-y: auto;
-  padding-right: 2px;
-}
-
-.model-empty-tip {
-  grid-column: 1 / -1;
-  text-align: center;
-  padding: 36px 0;
-  font-size: 13px;
-  color: var(--text-muted);
+  max-height: 380px;
+  padding-right: 4px;
 }
 
 .model-select-card {
-  padding: 10px 12px;
-  background-color: var(--control-bg);
-  border: 1px solid transparent;
-  border-radius: 6px;
+  padding: 12px;
+  border-radius: 8px;
+  border: 1px solid var(--control-border);
+  background-color: var(--panel-bg);
   cursor: pointer;
-  transition: all 0.12s ease;
+  transition: all 0.15s ease;
 }
 
 .model-select-card:hover {
-  background-color: var(--panel-bg);
-  border-color: var(--control-border);
+  border-color: var(--accent-color);
+  transform: translateY(-1px);
 }
 
 .model-select-card.active {
-  background-color: var(--panel-bg);
-  border-color: var(--text-primary);
+  border-color: var(--accent-color);
+  background-color: var(--accent-light);
 }
 
 .card-header-row {
   display: flex;
-  align-items: center;
   justify-content: space-between;
-  margin-bottom: 4px;
+  align-items: center;
+  margin-bottom: 6px;
 }
 
 .model-vendor-badge {
-  font-size: 11px;
+  font-size: 10px;
   color: var(--text-muted);
 }
 
 .model-current-active {
   font-size: 10px;
+  color: var(--accent-color);
   font-weight: 600;
-  color: #10b981;
 }
 
 .model-display-name {
   font-size: 13px;
   font-weight: 600;
   color: var(--text-primary);
-  margin-bottom: 2px;
+  margin-bottom: 4px;
 }
 
 .model-desc-text {
   font-size: 11px;
   color: var(--text-secondary);
-  line-height: 1.35;
+  line-height: 1.4;
 }
 
-/* 抽屉元信息 */
-.sys-meta-block {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  font-size: 12px;
-  color: var(--text-secondary);
+.model-empty-tip {
+  grid-column: span 2;
+  text-align: center;
+  padding: 40px 0;
+  color: var(--text-muted);
+  font-size: 13px;
 }
 
-.sys-row {
-  display: flex;
-  justify-content: space-between;
-}
-
-.sys-row code {
-  font-family: monospace;
-  background-color: var(--control-bg);
-  padding: 2px 6px;
-  border-radius: 4px;
+.drawer-inner-body {
+  padding: 0 4px;
 }
 
 .form-tip {
   font-size: 11px;
   color: var(--text-muted);
   margin-top: 4px;
+}
+
+.sys-meta-block {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  font-size: 12px;
+}
+
+.sys-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  color: var(--text-secondary);
+}
+
+.sys-row code {
+  color: var(--text-primary);
+  background-color: var(--control-bg);
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-family: ui-monospace, SFMono-Regular, monospace;
+}
+
+.sys-row a {
+  color: var(--accent-color);
+  text-decoration: none;
 }
 </style>

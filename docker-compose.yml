@@ -1,0 +1,45 @@
+version: '3.8'
+
+services:
+  # 后端与前端服务
+  workbench-app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: ruoyi-ai-workbench:prod-2.0.0
+    container_name: ruoyi-ai-workbench-app
+    restart: always
+    environment:
+      - API_KEY_302=${API_KEY_302}
+      - JWT_SECRET=${JWT_SECRET:-ruoyi_ai_workbench_prod_secret_2026}
+      - ENVIRONMENT=production
+    volumes:
+      - ./data:/app/data
+    networks:
+      - workbench-net
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/api/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+  # 生产级 Nginx 网关 (SSL / 反向代理 / 速率限制)
+  workbench-nginx:
+    image: nginx:alpine
+    container_name: ruoyi-ai-workbench-nginx
+    restart: always
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx/ssl:/etc/nginx/ssl:ro
+      - ./data/outputs:/usr/share/nginx/html/outputs:ro
+    depends_on:
+      - workbench-app
+    networks:
+      - workbench-net
+
+networks:
+  workbench-net:
+    driver: bridge

@@ -5,6 +5,49 @@ const service = axios.create({
   timeout: 60000
 })
 
+// 请求拦截器：自动注入 Bearer Token
+service.interceptors.request.use(
+  (config) => {
+    const token = localStorage.getItem('token')
+    if (token) {
+      config.headers['Authorization'] = `Bearer ${token}`
+    }
+    return config
+  },
+  (error) => {
+    return Promise.reject(error)
+  }
+)
+
+// 响应拦截器：全局拦截 401 未登录并触发重定向
+service.interceptors.response.use(
+  (response) => {
+    return response
+  },
+  (error) => {
+    if (error.response && error.response.status === 401) {
+      localStorage.removeItem('token')
+      localStorage.removeItem('userInfo')
+      window.dispatchEvent(new CustomEvent('auth:unauthorized'))
+    }
+    return Promise.reject(error)
+  }
+)
+
+// ================= 认证接口 =================
+export function login(data) {
+  return service.post('/auth/login', data)
+}
+
+export function getCurrentUser() {
+  return service.get('/auth/me')
+}
+
+export function logout() {
+  return service.post('/auth/logout')
+}
+
+// ================= 生图与资产业务接口 =================
 // 提交生图任务
 export function generateImage(data) {
   return service.post('/image/generate', data)
@@ -15,12 +58,12 @@ export function getTaskStatus(taskId) {
   return service.get(`/image/task/${taskId}`)
 }
 
-// 查询历史任务列表
+// 查询历史任务与资产列表
 export function listTasks(params) {
   return service.get('/image/tasks', { params })
 }
 
-// 删除任务
+// 删除资产任务
 export function deleteTask(taskId) {
   return service.delete(`/image/task/${taskId}`)
 }
@@ -49,4 +92,4 @@ export function list302Models(refresh = false) {
   return service.get('/models', { params: { refresh } })
 }
 
-
+export default service

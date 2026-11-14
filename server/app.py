@@ -1,6 +1,6 @@
 """
 FastAPI 后端服务: 桥接 302.ai 可灵 O3 生图脚本 (generate_kling_image_o3.py)
-为若依风格的生图工作台提供 RESTful API 与数据持久化
+整合 SQLite 用户认证鉴权体系、全接口强制拦截、用户资产隔离与持久化
 """
 
 import os
@@ -11,39 +11,57 @@ import uuid
 import shutil
 from pathlib import Path
 from typing import List, Optional, Dict, Any
-from fastapi import FastAPI, HTTPException, UploadFile, File, Form, Query
+
+from fastapi import FastAPI, HTTPException, UploadFile, File, Form, Query, Depends, Request, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, FileResponse
 from fastapi.staticfiles import StaticFiles
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from pydantic import BaseModel, Field
 
-# 确保能引用 scripts 目录下的生图核心客户端
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
 from scripts.generate_kling_image_o3 import KlingImageO3Client, DEFAULT_API_KEY, DEFAULT_BASE_URLS
+from server.db import (
+    init_db,
+    get_user_by_username,
+    get_user_by_id,
+    verify_password,
+    create_access_token,
+    decode_access_token,
+    insert_task,
+    get_task_by_id,
+    update_task_record,
+    list_user_tasks,
+    delete_user_task,
+    deduct_user_credits
+)
+from server.moderation import check_prompt_safety
+
+# 初始化数据库与默认管理员
+init_db()
 
 # 数据存储目录
 DATA_DIR = PROJECT_ROOT / "data"
 UPLOAD_DIR = DATA_DIR / "uploads"
 OUTPUT_DIR = DATA_DIR / "outputs"
-TASKS_FILE = DATA_DIR / "tasks.json"
 
 DATA_DIR.mkdir(parents=True, exist_ok=True)
 UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
 OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
-# 初始化客户端
+# 初始化生图核心客户端
 kling_client = KlingImageO3Client()
 
 app = FastAPI(
     title="RuoYi AI Image Workbench API",
-    description="若依风格 AI 生图工作台后端接口",
-    version="1.0.0"
+    description="若依风格 AI 生图工作台企业级后端接口（集成 JWT 登录鉴权与用户数据隔离）",
+    version="2.0.0"
 )
 
-# 允许跨域联调
+# 允许跨域
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -53,41 +71,105 @@ app.add_middleware(
 )
 
 
-# ================= 数据持久化辅助函数 =================
-def load_tasks() -> List[Dict[str, Any]]:
-    if not TASKS_FILE.exists():
-        return []
-    try:
-        with open(TASKS_FILE, "r", encoding="utf-8") as f:
-            return json.load(f)
-    except Exception:
-        return []
+# ================= 鉴权依赖项与强制拦截 =================
+security = HTTPBearer(auto_error=False)
 
 
-def save_tasks(tasks: List[Dict[str, Any]]):
-    with open(TASKS_FILE, "w", encoding="utf-8") as f:
-        json.dump(tasks, f, ensure_ascii=False, indent=2)
+async def get_current_user(credentials: Optional[HTTPAuthorizationCredentials] = Depends(security)) -> Dict[str, Any]:
+    """
+    核心用户鉴权依赖:
+    强制拦截未携带有效 Bearer Token 的请求，校验用户有效性并返回用户信息
+    """
+    if not credentials or not credentials.credentials:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="未登录或缺少身份令牌，请先登录",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    token = credentials.credentials
+    payload = decode_access_token(token)
+    if not payload or "user_id" not in payload:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="登录凭证已失效或无效，请重新登录",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    user = get_user_by_id(payload["user_id"])
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="用户不存在，请重新登录",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    if user.get("status") != 1:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="该账号已被停用，请联系管理员",
+        )
+    return user
 
 
-def get_task_by_id(task_id: str) -> Optional[Dict[str, Any]]:
-    tasks = load_tasks()
-    for t in tasks:
-        if t["task_id"] == task_id:
-            return t
-    return None
+# 全局中间件：强制拦截所有 /api/* 请求（白名单除外）
+PUBLIC_API_PATHS = {
+    "/api/auth/login",
+    "/api/health",
+    "/docs",
+    "/openapi.json",
+    "/redoc"
+}
 
 
-def update_task_record(task_id: str, updates: Dict[str, Any]) -> Optional[Dict[str, Any]]:
-    tasks = load_tasks()
-    for i, t in enumerate(tasks):
-        if t["task_id"] == task_id:
-            tasks[i].update(updates)
-            save_tasks(tasks)
-            return tasks[i]
-    return None
+@app.middleware("http")
+async def auth_interceptor_middleware(request: Request, call_next):
+    path = request.url.path
+
+    # 非 /api 路径（如静态资源、HTML等）直接放行
+    if not path.startswith("/api"):
+        return await call_next(request)
+
+    # 检查公开接口白名单
+    if path in PUBLIC_API_PATHS:
+        return await call_next(request)
+
+    # 拦截 OPTIONS 预检请求（浏览器 CORS 预检放行）
+    if request.method == "OPTIONS":
+        return await call_next(request)
+
+    # 针对受保护的 /api 请求执行 Token 强制校验
+    auth_header = request.headers.get("Authorization")
+    if not auth_header or not auth_header.startswith("Bearer "):
+        return JSONResponse(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            content={
+                "code": 401,
+                "msg": "未登录或登录已失效，请重新登录",
+                "detail": "Missing or invalid Authorization header"
+            }
+        )
+
+    token = auth_header.split(" ", 1)[1].strip()
+    payload = decode_access_token(token)
+    if not payload or "user_id" not in payload:
+        return JSONResponse(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            content={
+                "code": 401,
+                "msg": "登录令牌已过期或无效，请重新登录",
+                "detail": "Invalid JWT token"
+            }
+        )
+
+    # 注入当前用户ID到 request.state
+    request.state.user_id = payload["user_id"]
+    return await call_next(request)
 
 
-# ================= 请求模型 =================
+# ================= 请求与响应模型 =================
+class LoginRequest(BaseModel):
+    username: str = Field(..., description="用户名")
+    password: str = Field(..., description="密码")
+
+
 class GenerateImageRequest(BaseModel):
     prompt: str = Field(..., description="生图提示词")
     model_id: Optional[str] = Field(default="klingai", description="选择的生图模型 ID")
@@ -104,10 +186,11 @@ class UpdateConfigRequest(BaseModel):
     base_url: Optional[str] = Field(default=None, description="自定义 302.ai Base URL")
 
 
-# ================= 动态模型拉取与缓存 =================
+# ================= 动态模型缓存 =================
 import requests as sync_requests
 _CACHED_MODELS: List[Dict[str, Any]] = []
 _LAST_MODELS_FETCH_TIME: float = 0.0
+
 
 def fetch_302_models(api_key: str, base_url: str, force_refresh: bool = False) -> List[Dict[str, Any]]:
     global _CACHED_MODELS, _LAST_MODELS_FETCH_TIME
@@ -212,7 +295,6 @@ def fetch_302_models(api_key: str, base_url: str, force_refresh: bool = False) -
                 "is_default": mid_lower in ["klingai", "kling-image-o3"]
             })
 
-    # 保底补全可灵 O3
     if not any(m["id"] == "klingai" for m in filtered):
         filtered.insert(0, {
             "id": "klingai",
@@ -224,7 +306,6 @@ def fetch_302_models(api_key: str, base_url: str, force_refresh: bool = False) -
             "is_default": True
         })
     else:
-        # 置顶 klingai
         filtered.sort(key=lambda x: (0 if x["id"] == "klingai" else (1 if x["is_kling"] else 2)))
 
     _CACHED_MODELS = filtered
@@ -232,12 +313,87 @@ def fetch_302_models(api_key: str, base_url: str, force_refresh: bool = False) -
     return filtered
 
 
-# ================= REST API 路由 =================
+# ================= 用户登录认证路由 =================
+
+@app.post("/api/auth/login")
+def login(req: LoginRequest):
+    """
+    用户登录认证接口
+    校验用户名密码并签发 JWT Access Token
+    """
+    username = req.username.strip() if req.username else ""
+    password = req.password.strip() if req.password else ""
+
+    if not username or not password:
+        raise HTTPException(status_code=400, detail="用户名和密码不能为空")
+
+    user = get_user_by_username(username)
+    if not user:
+        raise HTTPException(status_code=401, detail="用户名或密码错误")
+
+    if not verify_password(password, user["password"]):
+        raise HTTPException(status_code=401, detail="用户名或密码错误")
+
+    if user.get("status") != 1:
+        raise HTTPException(status_code=403, detail="账号已被停用，请联系管理员")
+
+    token = create_access_token(user["id"], user["username"], user["role"])
+
+    user_info = {
+        "id": user["id"],
+        "username": user["username"],
+        "nickname": user["nickname"],
+        "avatar": user["avatar"],
+        "role": user["role"],
+        "credits": user["credits"]
+    }
+
+    return {
+        "code": 200,
+        "msg": "登录成功",
+        "data": {
+            "token": token,
+            "user": user_info
+        }
+    }
+
+
+@app.get("/api/auth/me")
+def get_current_user_profile(user: Dict[str, Any] = Depends(get_current_user)):
+    """获取当前已登录用户信息及剩余算力"""
+    fresh_user = get_user_by_id(user["id"]) or user
+    return {
+        "code": 200,
+        "msg": "获取用户信息成功",
+        "data": {
+            "id": fresh_user["id"],
+            "username": fresh_user["username"],
+            "nickname": fresh_user["nickname"],
+            "avatar": fresh_user["avatar"],
+            "role": fresh_user["role"],
+            "credits": fresh_user["credits"]
+        }
+    }
+
+
+@app.post("/api/auth/logout")
+def logout(user: Dict[str, Any] = Depends(get_current_user)):
+    """退出登录"""
+    return {"code": 200, "msg": "退出成功"}
+
+
+@app.get("/api/health")
+def health_check():
+    """健康探测"""
+    return {"code": 200, "status": "healthy"}
+
+
+# ================= 业务 API 路由（强依赖用户认证与资产关联） =================
 
 @app.get("/api/models")
-def list_302_models(refresh: bool = False):
+def list_302_models(refresh: bool = False, user: Dict[str, Any] = Depends(get_current_user)):
     """
-    动态拉取 302.ai 支持的所有生图模型列表
+    动态拉取 302.ai 支持的所有生图模型列表（需要登录）
     """
     models = fetch_302_models(kling_client.api_key, kling_client.current_base_url, force_refresh=refresh)
     vendors = list(dict.fromkeys([m["vendor"] for m in models]))
@@ -250,8 +406,9 @@ def list_302_models(refresh: bool = False):
         "current_active": "klingai"
     }
 
+
 @app.get("/api/system/info")
-def get_system_info():
+def get_system_info(user: Dict[str, Any] = Depends(get_current_user)):
     """获取系统与大模型链路状态"""
     masked_key = kling_client.api_key[:6] + "******" + kling_client.api_key[-4:] if len(kling_client.api_key) > 10 else "***"
     return {
@@ -269,8 +426,11 @@ def get_system_info():
 
 
 @app.post("/api/system/config")
-def update_system_config(req: UpdateConfigRequest):
-    """动态更新 API Key 或服务地址"""
+def update_system_config(req: UpdateConfigRequest, user: Dict[str, Any] = Depends(get_current_user)):
+    """动态更新 API Key 或服务地址（仅管理员）"""
+    if user.get("role") != "admin":
+        raise HTTPException(status_code=403, detail="仅系统管理员有权修改系统配置")
+
     if req.api_key and req.api_key.strip():
         kling_client.api_key = req.api_key.strip()
         kling_client.session.headers.update({"Authorization": f"Bearer {kling_client.api_key}"})
@@ -278,18 +438,30 @@ def update_system_config(req: UpdateConfigRequest):
         url = req.base_url.strip().rstrip("/")
         kling_client.base_urls = [url]
         kling_client.current_base_url = url
-    return {"code": 200, "msg": "配置已更新", "data": get_system_info()["data"]}
+    return {"code": 200, "msg": "配置已更新", "data": get_system_info(user=user)["data"]}
 
 
 @app.post("/api/image/generate")
-def generate_image(req: GenerateImageRequest):
+def generate_image(req: GenerateImageRequest, user: Dict[str, Any] = Depends(get_current_user)):
     """
-    提交 AI 生图任务到可灵 O3
+    提交 AI 生图任务到可灵 O3 并沉淀资产至数据库（与当前用户强关联）
     """
     if not req.prompt or not req.prompt.strip():
         raise HTTPException(status_code=400, detail="生图提示词不能为空")
 
-    # 如果传入了自定义 key
+    # 生产合规审查：敏感词与内容安全策略熔断
+    is_safe, reason, hit_words = check_prompt_safety(req.prompt)
+    if not is_safe:
+        raise HTTPException(status_code=400, detail=reason)
+
+    # 校验算力积分
+    if user.get("credits", 0) <= 0:
+        raise HTTPException(status_code=400, detail="您的算力余额不足，请联系管理员充值")
+
+    # 扣除积分
+    deduct_user_credits(user["id"], amount=1)
+
+    # 提交给底层生图客户端
     client = KlingImageO3Client(api_key=req.api_key) if req.api_key else kling_client
 
     try:
@@ -310,9 +482,8 @@ def generate_image(req: GenerateImageRequest):
     model_info = next((m for m in all_models if m["id"] == model_id), None)
     model_name = model_info["name"] if model_info else model_id
 
-    # 存入本地任务数据库
-    now = time.strftime("%Y-%m-%d %H:%M:%S")
-    new_task = {
+    # 存入数据库并与当前用户 user_id 关联
+    task_record = {
         "task_id": task_id,
         "prompt": req.prompt,
         "model_id": model_id,
@@ -325,58 +496,52 @@ def generate_image(req: GenerateImageRequest):
         "task_status": "submitted",
         "status_msg": "任务已提交至计算集群，排队处理中...",
         "result_images": [],
-        "cost_time": 0,
-        "create_time": now,
-        "start_timestamp": time.time()
+        "cost_time": 0
     }
 
-    tasks = load_tasks()
-    tasks.insert(0, new_task)
-    save_tasks(tasks)
+    inserted = insert_task(user_id=user["id"], task=task_record)
 
     return {
         "code": 200,
         "msg": "任务提交成功",
         "data": {
-            "task_id": task_id
+            "task_id": task_id,
+            "task": inserted
         }
     }
 
 
 @app.get("/api/image/task/{task_id}")
-def get_task_status(task_id: str):
+def get_task_status_endpoint(task_id: str, user: Dict[str, Any] = Depends(get_current_user)):
     """
-    轮询/获取生图任务最新状态与结果图片
+    轮询/获取生图任务最新状态与结果图片（只允许查询属于当前用户的任务）
     """
-    task = get_task_by_id(task_id)
+    task = get_task_by_id(task_id, user_id=user["id"] if user.get("role") != "admin" else None)
     if not task:
-        raise HTTPException(status_code=404, detail=f"未找到任务: {task_id}")
+        raise HTTPException(status_code=404, detail=f"未找到属于该用户的任务: {task_id}")
 
-    # 如果任务在本地已经是完成状态，直接返回
+    # 如果任务在本地数据库已经是最终完成状态，直接返回
     if task.get("task_status") in ["succeed", "failed"]:
         return {"code": 200, "data": task}
 
     # 主动向 302.ai 轮询一次实时状态
     try:
         res = kling_client.fetch_task_result(task_id)
-        status = res.get("status")
+        status_val = res.get("status")
         status_msg = res.get("msg") or ""
 
         # 成功完成
-        if status == "succeed":
+        if status_val == "succeed":
             image_urls = res.get("images", [])
-            cost_time = int((time.time() - task.get("start_timestamp", time.time())) * 1000)
-
             updated = update_task_record(task_id, {
                 "task_status": "succeed",
                 "status_msg": "生成成功",
-                "result_images": image_urls,
-                "cost_time": cost_time
+                "result_images": image_urls
             })
             return {"code": 200, "data": updated}
 
         # 任务失败
-        elif status == "failed":
+        elif status_val == "failed":
             updated = update_task_record(task_id, {
                 "task_status": "failed",
                 "status_msg": status_msg or "模型渲染失败"
@@ -395,26 +560,23 @@ def get_task_status(task_id: str):
         task["status_msg"] = f"正在轮询: {str(e)}"
         return {"code": 200, "data": task}
 
-    return {"code": 200, "data": task}
-
 
 @app.get("/api/image/tasks")
-def list_tasks(
+def list_tasks_endpoint(
     page_num: int = Query(default=1, alias="pageNum"),
     page_size: int = Query(default=12, alias="pageSize"),
-    prompt: Optional[str] = Query(default=None)
+    prompt: Optional[str] = Query(default=None),
+    user: Dict[str, Any] = Depends(get_current_user)
 ):
     """
-    分页查询历史生图任务列表
+    分页查询当前用户的生图资产列表（严格多租户数据隔离）
     """
-    all_tasks = load_tasks()
-    if prompt and prompt.strip():
-        all_tasks = [t for t in all_tasks if prompt.strip().lower() in t.get("prompt", "").lower()]
-
-    total = len(all_tasks)
-    start = (page_num - 1) * page_size
-    end = start + page_size
-    rows = all_tasks[start:end]
+    rows, total = list_user_tasks(
+        user_id=user["id"],
+        prompt=prompt,
+        page_num=page_num,
+        page_size=page_size
+    )
 
     return {
         "code": 200,
@@ -425,20 +587,18 @@ def list_tasks(
 
 
 @app.delete("/api/image/task/{task_id}")
-def delete_task(task_id: str):
+def delete_task_endpoint(task_id: str, user: Dict[str, Any] = Depends(get_current_user)):
     """
-    删除指定的任务记录
+    删除指定的任务资产记录（必须属于当前用户）
     """
-    tasks = load_tasks()
-    new_tasks = [t for t in tasks if t["task_id"] != task_id]
-    if len(new_tasks) == len(tasks):
-        raise HTTPException(status_code=404, detail="任务不存在")
-    save_tasks(new_tasks)
+    success = delete_user_task(task_id=task_id, user_id=user["id"])
+    if not success:
+        raise HTTPException(status_code=404, detail="任务不存在或无权删除")
     return {"code": 200, "msg": "删除成功"}
 
 
 @app.post("/api/image/upload-reference")
-async def upload_reference_image(file: UploadFile = File(...)):
+async def upload_reference_image(file: UploadFile = File(...), user: Dict[str, Any] = Depends(get_current_user)):
     """
     上传本地参考图，暂存并同步上传至 302.ai 云图床，返回公网可用 URL
     """
@@ -446,19 +606,19 @@ async def upload_reference_image(file: UploadFile = File(...)):
         raise HTTPException(status_code=400, detail="未检测到上传文件")
 
     ext = Path(file.filename).suffix
-    unique_name = f"ref_{uuid.uuid4().hex[:12]}{ext}"
+    unique_name = f"ref_{user['id']}_{uuid.uuid4().hex[:10]}{ext}"
     local_path = UPLOAD_DIR / unique_name
 
     with open(local_path, "wb") as buffer:
         shutil.copyfileobj(file.file, buffer)
 
     try:
-        # 同步上传到 302.ai 获取远程图床 URL
         remote_url = kling_client.upload_local_image(str(local_path))
         return {
             "code": 200,
             "msg": "参考图上传并同步成功",
             "url": remote_url,
+            "file_url": remote_url,
             "local_path": str(local_path)
         }
     except Exception as e:

@@ -576,7 +576,8 @@ const downloadUrl = (url, idx = 0) => {
   if (!url) return
   const a = document.createElement('a')
   a.href = url
-  a.download = `kling_o3_${Date.now()}_${idx + 1}.png`
+  const prefix = (props.currentModel?.id || 'ai_image').replace(/[^a-zA-Z0-9_-]/g, '_')
+  a.download = `${prefix}_${Date.now()}_${idx + 1}.png`
   a.target = '_blank'
   document.body.appendChild(a)
   a.click()

@@ -13,12 +13,16 @@
       <div class="topbar-left">
         <div class="brand-badge">
           <div class="brand-logo-icon">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
-              <circle cx="12" cy="12" r="9" />
-              <path d="M12 3a9 9 0 0 0 0 18v-9z" />
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z" />
+              <path d="M5 3v4" />
+              <path d="M19 17v4" />
+              <path d="M3 5h4" />
+              <path d="M17 19h4" />
             </svg>
           </div>
-          <span class="brand-name">Kling Studio</span>
+          <span class="brand-name">RuoYi AI Studio</span>
+          <span class="brand-sub-badge">302.ai 全模型</span>
         </div>
 
         <div class="topbar-divider"></div>
@@ -603,6 +607,17 @@ onBeforeUnmount(() => {
   font-weight: 700;
   letter-spacing: -0.3px;
   color: var(--text-primary);
+}
+
+.brand-sub-badge {
+  font-size: 10px;
+  font-weight: 600;
+  padding: 1px 6px;
+  border-radius: 4px;
+  background: var(--control-bg);
+  color: var(--accent-color);
+  border: 1px solid var(--control-border);
+  letter-spacing: 0;
 }
 
 .topbar-divider {

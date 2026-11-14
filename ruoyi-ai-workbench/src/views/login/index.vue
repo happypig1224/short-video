@@ -8,13 +8,16 @@
       <!-- 头部品牌 Logo -->
       <div class="login-header">
         <div class="brand-icon-box">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
-            <circle cx="12" cy="12" r="9" />
-            <path d="M12 3a9 9 0 0 0 0 18v-9z" />
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z" />
+            <path d="M5 3v4" />
+            <path d="M19 17v4" />
+            <path d="M3 5h4" />
+            <path d="M17 19h4" />
           </svg>
         </div>
         <h1 class="brand-title">若依 AI 生图工作台</h1>
-        <p class="brand-subtitle">RuoYi AI Studio · 企业级多模态视觉生成系统</p>
+        <p class="brand-subtitle">RuoYi AI Studio · 302.ai 全模型通用多模态视觉生成系统</p>
       </div>
 
       <!-- 登录表单 -->
@@ -75,7 +78,7 @@
           <span>算法备案编号：网信算备 110108746200234010013 号</span>
         </div>
         <div class="copyright-meta">
-          <span>© 2026 若依 AI 生图工作台 · Kling O3 引擎驱动 · All Rights Reserved</span>
+          <span>© 2026 若依 AI 生图工作台 · 302.ai 全模型矩阵驱动 · All Rights Reserved</span>
         </div>
       </div>
     </div>
